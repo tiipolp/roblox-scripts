@@ -115,14 +115,6 @@ end)
 local tpwalking = false
 local speedMultiplier = 0
 
-local function onHeartbeat()
-    if tpwalking and humanoid and character and speedMultiplier > 0 then
-        if humanoid.MoveDirection.Magnitude > 0 then
-            character:TranslateBy(humanoid.MoveDirection * speedMultiplier * game:GetService("RunService").Heartbeat:Wait() * 10)
-        end
-    end
-end
-
 local _speedToggle = MiscTab:CreateToggle({
     Name = "Speed Hack",
     CurrentValue = false,
@@ -132,7 +124,7 @@ local _speedToggle = MiscTab:CreateToggle({
     end,
 })
 
-local _SpeedSlider = MiscTab:CreateSlider({
+local _speedSlider = MiscTab:CreateSlider({
     Name = "WalkSpeed (0-1 for legit looking speed)",
     Range = {0, 3},
     Increment = 0.1,
@@ -144,9 +136,13 @@ local _SpeedSlider = MiscTab:CreateSlider({
     end,
 })
 
-game:GetService("RunService").Heartbeat:Connect(onHeartbeat)
-
-local antiKickWorked = false
+game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+    if tpwalking and humanoid and character and speedMultiplier > 0 then
+        if humanoid.MoveDirection.Magnitude > 0 then
+            character:TranslateBy(humanoid.MoveDirection * speedMultiplier * game:GetService("RunService").Heartbeat:Wait() * 10)
+        end
+    end 
+end)
 
 if not hookmetamethod then 
     Rayfield:Notify({
@@ -155,45 +151,182 @@ if not hookmetamethod then
         Duration = 6.5,
         Image = "rewind",
     })
-    antiKickWorked = true
-    return
 end
 
-if not checkcaller then
+if not hookfunction then 
     Rayfield:Notify({
         Title = "Exploit missing hooking",
-        Content = "Your exploit does not support checkcaller, which is a part of the anti-anti-cheat but it will still work normally.",
+        Content = "Your exploit does not support hookfunction, which is required for the anti-anti-cheat to work, some stuff will still work, incompatible features will be disabled and not shown.",
         Duration = 6.5,
         Image = "rewind",
     })
-    checkcaller = function() return false end
 end
 
-local AllowExecutorKicks = true
+if not checkcaller then
+    getgenv().checkcaller = function() return false end
+end
 
-for i,v in ipairs({"Kick", "kick"}) do
-    local oldkick
-    oldkick = hookfunction(player[v], newcclosure(function(self, ...)
-        if self == player then
+if hookfunction and hookmetamethod then
+    for i,v in ipairs({"Kick", "kick"}) do
+        local oldkick
+        oldkick = hookfunction(player[v], newcclosure(function(self, ...)
+            if self == player then
+                if checkcaller() then
+                    return oldkick(self, ...)
+                else
+                    return
+                end
+            end
+            return oldkick(self, ...)
+        end))
+    end
+
+    local oldhmmnc
+    oldhmmnc = hookmetamethod(game, "__namecall", function(self, ...)
+        if self == player and table.find({"Kick", "kick"}, getnamecallmethod()) then
             if checkcaller() then
-                return oldkick(self, ...)
+                return oldhmmnc(self, ...)
             else
                 return
             end
         end
-        return oldkick(self, ...)
-    end))
+        return oldhmmnc(self, ...)
+    end)
 end
 
-local oldhmmnc
-oldhmmnc = hookmetamethod(game, "__namecall", function(self, ...)
-    if self == player and table.find({"Kick", "kick"}, getnamecallmethod()) then
-        if checkcaller() then
-            return oldhmmnc(self, ...)
-        else
-            return
-        end
-    end
-    return oldhmmnc(self, ...)
-end)
+if not getgc then
+    Rayfield:Notify({
+        Title = "Exploit missing getgc",
+        Content = "Your exploit does not support getgc, some features will be hidden.",
+        Duration = 6.5,
+        Image = "rewind",
+    })
+end
 
+if not islclosure then
+    Rayfield:Notify({
+        Title = "Exploit missing islclosure",
+        Content = "Your exploit does not support islclosure, some features will be hidden.",
+        Duration = 6.5,
+        Image = "rewind",
+    })
+end
+
+if not debug.getconstants then
+    Rayfield:Notify({
+        Title = "Exploit missing debug.getconstants",
+        Content = "Your exploit does not support debug.getconstants, some features will be hidden.",
+        Duration = 6.5,
+        Image = "rewind",
+    })
+end
+
+if not debug.setconstant then
+    Rayfield:Notify({
+        Title = "Exploit missing debug.setconstant",
+        Content = "Your exploit does not support debug.setconstant, some features will be hidden.",
+        Duration = 6.5,
+        Image = "rewind",
+    })
+end
+
+if islclosure and getgc and debug.getconstants and debug.setconstant then
+    MiscTab:CreateLabel("May crash on some executors", "arrow-down")
+    local staminaFunc
+    local regen
+    local degen
+
+    local staminaHackEnabled = false
+
+    local function initStaminaHack()
+        if staminaHackEnabled then return end
+
+        for _, func in pairs(getgc()) do
+            if typeof(func) == "function" and islclosure(func) then
+                local constants = debug.getconstants(func)
+                local getattr = false
+                local maxstam = false 
+                local isplaying = false
+                local shadow = false
+                local enummat = false
+                
+                for i,v in pairs(constants) do
+                    if v == "GetAttribute" then
+                        getattr = true
+                    elseif v == "MAXSTAMINA" then
+                        maxstam = true
+                    elseif v == "IsPlaying" then
+                        isplaying = true
+                    elseif v == "SHADOW" then
+                        shadow = true
+                    elseif v == "Air" then
+                        enummat = true
+                    elseif v == 0.02 then
+                        regen = i
+                    elseif v == 0.08 then
+                        degen = i
+                    end
+                end
+
+                if getattr and maxstam and isplaying and shadow and not enummat and regen then
+                    --debug.setconstant(func, regen, 50)
+                    staminaFunc = func
+                end
+            end
+        end
+
+        staminaHackEnabled = true
+    end
+
+    local _regenSlider = MiscTab:CreateSlider({
+        Name = "Stamina Regen Rate",
+        Range = {-5, 5},
+        Increment = 0.01,
+        Suffix = "",
+        CurrentValue = 0.02,
+        Flag = "stamina_regen",
+        Callback = function(Value)
+            if staminaFunc then
+                debug.setconstant(staminaFunc, regen, Value)
+            end
+        end,
+    })
+
+    local _degenSlider = MiscTab:CreateSlider({
+        Name = "Stamina Degeneration Rate",
+        Range = {-5, 5},
+        Increment = 0.01,
+        Suffix = "",
+        CurrentValue = 0.08,
+        Flag = "stamina_degen",
+        Callback = function(Value)
+            if staminaFunc then
+                debug.setconstant(staminaFunc, degen, Value)
+            end
+        end,
+    })
+
+    local _regenToggle = MiscTab:CreateToggle({
+        Name = "Stamina Regen Hack",
+        CurrentValue = false,
+        Flag = "stamina_regen_toggle",
+        Callback = function(Value)
+            if Value == true and not staminaHackEnabled then initStaminaHack() end
+            if staminaFunc then
+                debug.setconstant(staminaFunc, regen, 0.02)
+            end
+        end,
+    })
+
+    local _degenToggle = MiscTab:CreateToggle({
+        Name = "Stamina Degeneration Hack",
+        CurrentValue = false,
+        Flag = "stamina_degen_toggle",
+        Callback = function(Value)
+            if Value == true and not staminaHackEnabled then initStaminaHack() end
+            if staminaFunc then
+                debug.setconstant(staminaFunc, degen, 0.08)
+            end
+        end,
+    })
+end
