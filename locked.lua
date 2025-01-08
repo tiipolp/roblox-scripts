@@ -6,6 +6,9 @@ local kickHighlightEnabled = false
 local player = game:GetService("Players").LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+local uis = game:GetService("UserInputService")
 
 local touching = false
 
@@ -27,12 +30,13 @@ local MainWindow = Rayfield:CreateWindow({
     KeySystem = false
 })
 
-local MiscTab = MainWindow:CreateTab("Misc", 4483362458)
+local BallControlTab = MainWindow:CreateTab("Ball Control", 4483362458)
+local MovementTab = MainWindow:CreateTab("Movement", 4483362458)
 
 local function isIframed(ball)
     return ball:GetAttribute("headeriframes") ~= "none" or 
-           ball:GetAttribute("iframes") ~= "none" or 
-           ball:GetAttribute("kickiframes") ~= "none"
+        ball:GetAttribute("iframes") ~= "none" or 
+        ball:GetAttribute("kickiframes") ~= "none"
 end
 
 local function updateState(ball)
@@ -66,7 +70,7 @@ local weld = kickHitbox:WaitForChild("WeldConstraint")
 weld.Part0 = kickHitbox
 weld.Part1 = character:WaitForChild("HumanoidRootPart")
 
-local _iframeHighlightToggle = MiscTab:CreateToggle({
+local _iframeHighlightToggle = BallControlTab:CreateToggle({
     Name = "IFrame Highlighting",
     CurrentValue = false,
     Flag = "iframe_highlight_toggle",
@@ -75,7 +79,7 @@ local _iframeHighlightToggle = MiscTab:CreateToggle({
     end,
 })
 
-local _kickHighlightToggle = MiscTab:CreateToggle({
+local _kickHighlightToggle = BallControlTab:CreateToggle({
     Name = "Kick Highlighting",
     CurrentValue = false,
     Flag = "kick_highlight_toggle",
@@ -115,7 +119,7 @@ end)
 local tpwalking = false
 local speedMultiplier = 0
 
-local _speedToggle = MiscTab:CreateToggle({
+local _speedToggle = MovementTab:CreateToggle({
     Name = "Speed Hack",
     CurrentValue = false,
     Flag = "speed_toggle",
@@ -124,7 +128,7 @@ local _speedToggle = MiscTab:CreateToggle({
     end,
 })
 
-local _speedSlider = MiscTab:CreateSlider({
+local _speedSlider = MovementTab:CreateSlider({
     Name = "WalkSpeed (0-1 for legit looking speed)",
     Range = {0, 3},
     Increment = 0.1,
@@ -231,7 +235,7 @@ if not debug.setconstant then
 end
 
 if islclosure and getgc and debug.getconstants and debug.setconstant then
-    MiscTab:CreateLabel("May crash on some executors", "arrow-down")
+    MovementTab:CreateLabel("May crash on some executors", "arrow-down")
     local staminaFunc
     local regen
     local degen
@@ -250,6 +254,7 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
                 local shadow = false
                 local enummat = false
                 
+            
                 for i,v in pairs(constants) do
                     if v == "GetAttribute" then
                         getattr = true
@@ -268,8 +273,7 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
                     end
                 end
 
-                if getattr and maxstam and isplaying and shadow and not enummat and regen then
-                    --debug.setconstant(func, regen, 50)
+                if getattr and maxstam and isplaying and shadow and not enummat then
                     staminaFunc = func
                 end
             end
@@ -278,55 +282,174 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
         staminaHackEnabled = true
     end
 
-    local _regenSlider = MiscTab:CreateSlider({
-        Name = "Stamina Regen Rate",
-        Range = {-5, 5},
+    local regenOn = false
+    local degenOn = false
+    local regenVal
+    local degenVal
+
+    local _regenSlider = MovementTab:CreateSlider({
+        Name = "Stamina Regen Rate (Default: 0.02)",
+        Range = {-2, 2},
         Increment = 0.01,
         Suffix = "",
         CurrentValue = 0.02,
         Flag = "stamina_regen",
         Callback = function(Value)
-            if staminaFunc then
-                debug.setconstant(staminaFunc, regen, Value)
+            regenVal = Value
+            if staminaFunc and regenOn then
+                debug.setconstant(staminaFunc, degen - 3, Value) -- until i can find a diff way, just do this. regen iteraiton is 5, degen is 8, hopefully this doesnt change
             end
         end,
     })
 
-    local _degenSlider = MiscTab:CreateSlider({
-        Name = "Stamina Degeneration Rate",
-        Range = {-5, 5},
+    local _degenSlider = MovementTab:CreateSlider({
+        Name = "Stamina Degeneration Rate (Default: 0.08)",
+        Range = {-2, 2},
         Increment = 0.01,
         Suffix = "",
         CurrentValue = 0.08,
         Flag = "stamina_degen",
         Callback = function(Value)
-            if staminaFunc then
+            degenVal = Value
+            if staminaFunc and degenOn then
                 debug.setconstant(staminaFunc, degen, Value)
             end
         end,
     })
 
-    local _regenToggle = MiscTab:CreateToggle({
+    local _regenToggle = MovementTab:CreateToggle({
         Name = "Stamina Regen Hack",
         CurrentValue = false,
         Flag = "stamina_regen_toggle",
         Callback = function(Value)
-            if Value == true and not staminaHackEnabled then initStaminaHack() end
-            if staminaFunc then
+            if Value and not staminaHackEnabled then initStaminaHack() end
+
+            regenOn = Value
+
+            if staminaFunc and not Value then
                 debug.setconstant(staminaFunc, regen, 0.02)
+            elseif staminaFunc and Value then
+                debug.setconstant(staminaFunc, regen, regenVal)
+                print(table.unpack(debug.getconstants(staminaFunc)))
             end
         end,
     })
 
-    local _degenToggle = MiscTab:CreateToggle({
+    local _degenToggle = MovementTab:CreateToggle({
         Name = "Stamina Degeneration Hack",
         CurrentValue = false,
         Flag = "stamina_degen_toggle",
         Callback = function(Value)
-            if Value == true and not staminaHackEnabled then initStaminaHack() end
-            if staminaFunc then
+            if Value and not staminaHackEnabled then initStaminaHack() end
+
+            degenOn = Value
+
+            if staminaFunc and not Value then
                 debug.setconstant(staminaFunc, degen, 0.08)
+            elseif staminaFunc and Value then
+                debug.setconstant(staminaFunc, degen, degenVal)
+                print(table.unpack(debug.getconstants(staminaFunc)))
             end
+        end,
+    })
+end
+
+function dribble(method)
+    local playerLookVector = hrp.CFrame.lookVector
+    local playerVelocity = hrp.Velocity.Magnitude
+    local playerPosition = hrp.Position
+
+    local keycodes = {
+        [Enum.KeyCode.W] = hrp.CFrame.lookVector,
+        [Enum.KeyCode.A] = -hrp.CFrame.RightVector,
+        [Enum.KeyCode.S] = -hrp.CFrame.lookVector,
+        [Enum.KeyCode.D] = hrp.CFrame.RightVector
+    }
+
+    local inf = (-1 / 0)
+    local wPressed
+
+    if uis:IsKeyDown(Enum.KeyCode.W) then
+        playerLookVector = hrp.CFrame.lookVector
+        wPressed = Enum.KeyCode.W
+    else
+        for keycode, vectors in pairs(keycodes) do
+            if uis:IsKeyDown(keycode) then
+                local dot = vectors:Dot(hrp.Velocity.Unit)
+                if inf < dot then
+                    wPressed = keycode
+                    inf = dot
+                end
+            end
+        end
+    end
+
+    if wPressed then
+        playerLookVector = keycodes[wPressed]
+    end
+
+    if method == 1 then
+        game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, workspace.BallFolder.Ball.CFrame.Position)
+    else
+        game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, playerPosition)
+    end
+end
+
+local dribblePath = game:GetService("ReplicatedStorage"):WaitForChild("Dribble")
+local isDribbleAnywhere = false
+local isDribbleExtender = false
+local dribbleExtenderValue = 18
+local oldNamecall
+
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+
+    if (isDribbleAnywhere or isDribbleExtender) and self == dribblePath and method == "FireServer" and args[3] == hrp.Position then
+        if isDribbleAnywhere then
+            dribble(1)
+        elseif isDribbleExtender and dribbleExtenderValue >= 0 and (hrp.CFrame.Position - workspace.BallFolder.Ball.CFrame.Position).Magnitude <= dribbleExtenderValue then
+            dribble(1)
+        end
+
+        return nil
+    end
+
+    return oldNamecall(self, unpack(args))
+end) 
+
+if hookmetamethod and getnamecallmethod then
+    local _dribbeAnywhereToggle
+    local _dribbleExtenderSlider
+    local _dribbleExtenderToggle
+
+    _dribbeAnywhereToggle = BallControlTab:CreateToggle({
+        Name = "Dribble The Ball From Literally Anywhere",
+        CurrentValue = false,
+        Flag = "dribble_anywhere_toggle",
+        Callback = function(Value)
+            isDribbleAnywhere = Value
+        end,
+    })
+
+    _dribbleExtenderSlider = BallControlTab:CreateSlider({
+        Name = "Dribble Hitbox Extender (Default: 18)",
+        Range = {0, 100},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 18,
+        Flag = "dribble_extender_slider",
+        Callback = function(Value)
+            dribbleExtenderValue = Value
+        end,
+    })
+
+    _dribbleExtenderToggle = BallControlTab:CreateToggle({
+        Name = "Dribble Hitbox Extender",
+        CurrentValue = false,
+        Flag = "dribble_extender_toggle",
+        Callback = function(Value)
+            isDribbleExtender = Value
         end,
     })
 end

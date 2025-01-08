@@ -1,1 +1,28 @@
-"assert(getscriptbytecode, \"Exploit not supported.\")\r\n\r\nlocal API: string = \"http://api.plusgiant5.com\"\r\n\r\nlocal last_call = 0\r\nlocal function call(konstantType: string, scriptPath: Script | ModuleScript | LocalScript): string\r\n    local success: boolean, bytecode: string = pcall(getscriptbytecode, scriptPath)\r\n\r\n    if (not success) then\r\n        return `-- Failed to get script bytecode, error:\\n\\n--[[\\n{bytecode}\\n--]]`\r\n    end\r\n\r\n    local time_elapsed = os.clock() - last_call\r\n    if time_elapsed \u003C= .5 then\r\n        task.wait(.5 - time_elapsed)\r\n    end\r\n    local httpResult = request({\r\n        Url = API .. konstantType,\r\n        Body = bytecode,\r\n        Method = \"POST\",\r\n        Headers = {\r\n            [\"Content-Type\"] = \"text/plain\"\r\n        },\r\n    })\r\n    last_call = os.clock()\r\n    \r\n    if (httpResult.StatusCode ~= 200) then\r\n        return `-- Error occured while requesting the API, error:\\n\\n--[[\\n{httpResult.Body}\\n--]]`\r\n    else\r\n        return httpResult.Body\r\n    end\r\nend\r\n\r\nlocal function decompile(scriptPath: Script | ModuleScript | LocalScript): string\r\n    return call(\"/konstant/decompile\", scriptPath)\r\nend\r\n\r\nlocal function disassemble(scriptPath: Script | ModuleScript | LocalScript): string\r\n    return call(\"/konstant/disassemble\", scriptPath)\r\nend\r\n\r\ngetgenv().decompile = decompile\r\ngetgenv().disassemble = disassemble\r\n\r\n-- by lovrewe"
+assert(getscriptbytecode, "Exploit not supported.")
+local API = "http://api.plusgiant5.com"
+local last_call = 0
+local function call(konstantType, scriptPath)
+    local success, string = pcall(getscriptbytecode, scriptPath)
+    if (not success) then
+        return `-- Failed to get script bytecode, error:\\n\\n--[[\\n{bytecode}\\n--]]`
+    end
+    local time_elapsed = os.clock() - last_call
+    if time_elapsed == .5 then
+        task.wait(.5 - time_elapsed)
+    end
+    local httpResult = request({Url = API .. konstantType,Body = bytecode,Method = "POST",Headers = {["Content-Type"] = "text/plain"},})
+    last_call = os.clock()
+    if (httpResult.StatusCode ~= 200) then
+        return `-- Error occured while requesting the API, error:\\n\\n--[[\\n{httpResult.Body}\\n--]]`
+    else
+        return httpResult.Body
+    end
+end
+local function decompile(scriptPath)
+    return call("/konstant/decompile", scriptPath)
+end
+local function disassemble(scriptPath)
+    return call("/konstant/disassemble", scriptPath)
+end
+getgenv().decompile = decompile
+getgenv().disassemble = disassemble

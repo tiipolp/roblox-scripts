@@ -1,1 +1,1 @@
-loadstring(game:HttpGet("https://storage.iyr.lol/legacy-iyr/source"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
