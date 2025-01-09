@@ -235,7 +235,7 @@ if not debug.setconstant then
 end
 
 if islclosure and getgc and debug.getconstants and debug.setconstant then
-    MovementTab:CreateLabel("May crash on some executors", "arrow-down")
+    MovementTab:CreateLabel("The functions below may crash on some executors (unlikely)", "arrow-down")
     local staminaFunc
     local regen
     local degen
@@ -327,9 +327,9 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
             regenOn = Value
 
             if staminaFunc and not Value then
-                debug.setconstant(staminaFunc, regen, 0.02)
+                debug.setconstant(staminaFunc, degen - 3, 0.02)
             elseif staminaFunc and Value then
-                debug.setconstant(staminaFunc, regen, regenVal)
+                debug.setconstant(staminaFunc, degen - 3, regenVal)
                 print(table.unpack(debug.getconstants(staminaFunc)))
             end
         end,
@@ -352,73 +352,109 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
             end
         end,
     })
+
+    MovementTab:CreateLabel("The functions above may crash on some executors (unlikely)", "arrow-up")
 end
 
-function dribble(method)
-    local playerLookVector = hrp.CFrame.lookVector
-    local playerVelocity = hrp.Velocity.Magnitude
-    local playerPosition = hrp.Position
-
-    local keycodes = {
-        [Enum.KeyCode.W] = hrp.CFrame.lookVector,
-        [Enum.KeyCode.A] = -hrp.CFrame.RightVector,
-        [Enum.KeyCode.S] = -hrp.CFrame.lookVector,
-        [Enum.KeyCode.D] = hrp.CFrame.RightVector
-    }
-
-    local inf = (-1 / 0)
-    local wPressed
-
-    if uis:IsKeyDown(Enum.KeyCode.W) then
-        playerLookVector = hrp.CFrame.lookVector
-        wPressed = Enum.KeyCode.W
-    else
-        for keycode, vectors in pairs(keycodes) do
-            if uis:IsKeyDown(keycode) then
-                local dot = vectors:Dot(hrp.Velocity.Unit)
-                if inf < dot then
-                    wPressed = keycode
-                    inf = dot
+if hookmetamethod and getnamecallmethod then
+    function dribble(method)
+        local playerLookVector = hrp.CFrame.lookVector
+        local playerVelocity = hrp.Velocity.Magnitude
+        local playerPosition = hrp.Position
+    
+        local keycodes = {
+            [Enum.KeyCode.W] = hrp.CFrame.lookVector,
+            [Enum.KeyCode.A] = -hrp.CFrame.RightVector,
+            [Enum.KeyCode.S] = -hrp.CFrame.lookVector,
+            [Enum.KeyCode.D] = hrp.CFrame.RightVector
+        }
+    
+        local inf = (-1 / 0)
+        local wPressed
+    
+        if uis:IsKeyDown(Enum.KeyCode.W) then
+            playerLookVector = hrp.CFrame.lookVector
+            wPressed = Enum.KeyCode.W
+        else
+            for keycode, vectors in pairs(keycodes) do
+                if uis:IsKeyDown(keycode) then
+                    local dot = vectors:Dot(hrp.Velocity.Unit)
+                    if inf < dot then
+                        wPressed = keycode
+                        inf = dot
+                    end
                 end
             end
         end
+    
+        if wPressed then
+            playerLookVector = keycodes[wPressed]
+        end
+    
+        if method == 1 then
+            game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, workspace.BallFolder.Ball.CFrame.Position)
+        else
+            game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, playerPosition)
+        end
     end
 
-    if wPressed then
-        playerLookVector = keycodes[wPressed]
-    end
+    local powerBar = game:GetService("Players").LocalPlayer.PlayerGui.GeneralGUI.middle.DribbleStyle:Clone()
+    powerBar.Name = "PowerBar"
+    powerBar.Text = "CURRENT POWER:"
+    powerBar.Position = UDim2.new(0, 0, -0.2, 0)
+    powerBar.Parent = game:GetService("Players").LocalPlayer.PlayerGui.GeneralGUI.middle
+    powerBar.Visible = false
 
-    if method == 1 then
-        game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, workspace.BallFolder.Ball.CFrame.Position)
-    else
-        game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, playerPosition)
-    end
-end
+    local kickPower = game:GetService("Players").LocalPlayer.PlayerGui.GeneralGUI.CurrentPower.PWR
+    local customPower
 
-local dribblePath = game:GetService("ReplicatedStorage"):WaitForChild("Dribble")
-local isDribbleAnywhere = false
-local isDribbleExtender = false
-local dribbleExtenderValue = 18
-local oldNamecall
+    local isDribbleAnywhere = false
+    local isDribbleExtender = false
+    local dribbleExtenderValue = 18
+    local antiRagdoll = false
+    local ragdollTime = 1.5
+    local kickPowerModToggle
+    local oldNamecall
 
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
 
-    if (isDribbleAnywhere or isDribbleExtender) and self == dribblePath and method == "FireServer" and args[3] == hrp.Position then
-        if isDribbleAnywhere then
-            dribble(1)
-        elseif isDribbleExtender and dribbleExtenderValue >= 0 and (hrp.CFrame.Position - workspace.BallFolder.Ball.CFrame.Position).Magnitude <= dribbleExtenderValue then
-            dribble(1)
+        if (isDribbleAnywhere or isDribbleExtender) and self.Name == "Dribble" and method == "FireServer" and args[3] == hrp.Position then
+            if isDribbleAnywhere then
+                dribble(1)
+            elseif isDribbleExtender and dribbleExtenderValue >= 0 and (hrp.CFrame.Position - workspace.BallFolder.Ball.CFrame.Position).Magnitude <= dribbleExtenderValue then
+                dribble(1)
+            end
+
+            return nil
+        elseif (antiRagdoll or ragdollTime) and self.Name == "Ragdoll" and method == "FireServer" and args[5] == nil then -- idk how else to check if the remote was called from exec or not, checkcaller didnt work or i didn't use it right
+            if antiRagdoll then
+                return nil    
+            elseif ragdollTime >= 0 then 
+                game:GetService("ReplicatedStorage"):WaitForChild("Ragdoll"):FireServer(0, ragdollTime, true, not not (player.Backpack:FindFirstChild("Voracious") and player.PlayerGui.GeneralGUI.CurrentStamina.STAM.Value > 5), true)
+            end
+            
+            return nil 
+        elseif (kickPowerModToggle) and self.Name == "shoot" and method == "FireServer" and args[10].R < 0.15 then
+            
+            local modArgs = {}
+
+            for i,v in pairs(args) do
+                modArgs[i] = v
+            end
+
+            modArgs[2] = math.floor((139 * (1 + customPower)) * 10) / 10
+            modArgs[10] = Color3.new(0.20, modArgs[10].B, modArgs[10].G)
+            
+            game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(modArgs))            
+
+            return nil
         end
 
-        return nil
-    end
+        return oldNamecall(self, unpack(args))
+    end) 
 
-    return oldNamecall(self, unpack(args))
-end) 
-
-if hookmetamethod and getnamecallmethod then
     local _dribbeAnywhereToggle
     local _dribbleExtenderSlider
     local _dribbleExtenderToggle
@@ -450,6 +486,51 @@ if hookmetamethod and getnamecallmethod then
         Flag = "dribble_extender_toggle",
         Callback = function(Value)
             isDribbleExtender = Value
+        end,
+    })
+
+    local _customRagdollTime = MovementTab:CreateSlider({
+        Name = "Custom Ragdoll Time (Default: " .. tostring((player.Backpack.Trait:FindFirstChild("Ripper") and 4.5 or 1.5) - (player.Backpack:FindFirstChild("Voracious") and player.PlayerGui.GeneralGUI.CurrentStamina.STAM.Value > 5 and 1 or 0)) .. "s)",
+        Range = {0, 6},
+        Increment = 0.1,
+        Suffix = "",
+        CurrentValue = 1.5,
+        Flag = "custom_ragdoll_time",
+        Callback = function(Value)
+            ragdollTime = Value
+        end,
+    })
+
+    local _antiRagdollToggle = MovementTab:CreateToggle({
+        Name = "Anti Ragdoll",
+        CurrentValue = false,
+        Flag = "anti_ragdoll_toggle",
+        Callback = function(Value)
+            antiRagdoll = Value
+        end,
+    })
+
+    local _kickModToggle = BallControlTab:CreateToggle({  
+        Name = "Kick Power Modifier",
+        CurrentValue = false,
+        Flag = "kick_power_modifier_toggle",
+        Callback = function(Value)
+            powerBar.Visible = Value
+
+            kickPower.Changed:Connect(function(value)
+                if kickPower.Value <= 0.401 then
+                    powerBar.Text = "CURRENT POWER: " .. math.floor((139 * (1 + value)) * 10) / 10
+                    customPower = kickPower.Value
+                else
+                    repeat
+                        customPower = customPower + 0.1
+                        powerBar.Text = "CURRENT POWER: " .. math.floor((139 * (1 + customPower)) * 10) / 10
+                        wait(0.1)
+                    until customPower > 3 or game:GetService("Players").LocalPlayer.PlayerGui.GeneralGUI.Shotbar.Visible == false
+                end
+            end)
+
+            kickPowerModToggle = Value
         end,
     })
 end
