@@ -16,7 +16,7 @@ getgenv().filtergc = function(typef, options, return_one) -- typef: string, opti
 
     if typef == "function" then 
         for _,v in ipairs(getgc()) do
-            if typeof(v) == "function" then
+            if typeof(v) == "function" and islclosure(v) then
                 local matches = true
 
                 if options.IgnoreExecutor ~= false then options.IgnoreExecutor = true end
