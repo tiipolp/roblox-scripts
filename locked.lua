@@ -251,155 +251,9 @@ kickHitbox.Touched:Connect(function(hit)
     end
 end)
 
-local stealTouching = false
-
-stealHitbox.Touched:Connect(function(hit)
-    if hit.Name == "Ball" then
-        if autoSteal and (hit:GetAttribute("kickiframes") ~= player.Name and not hit:GetAttribute("kickiframes") ~= tostring(player.Team) and hit:GetAttribute("iframes") ~= player.Name and not hit:GetAttribute("iframes") ~= tostring(player.Team)) and hit:GetAttribute("iframes") ~= "none" then
-            if hit:GetAttribute("breakkick") then return end
-            
-            stealTouching = true
-            
-            if autoStealLegit and stealTouching then
-                --[[
-                game:GetService("VirtualInputManager"):SendMouseButtonEvent(workspace.CurrentCamera.ViewportSize.X / 2,workspace.CurrentCamera.ViewportSize.Y / 2  - (game:GetService("GuiService"):GetGuiInset().Y/2),1,true,game,0)
-                task.wait()
-                game:GetService("VirtualInputManager"):SendMouseButtonEvent(workspace.CurrentCamera.ViewportSize.X / 2,workspace.CurrentCamera.ViewportSize.Y / 2  - (game:GetService("GuiService"):GetGuiInset().Y/2),1,false,game,0)
-                --]]
-
-                local args = {
-                    [1] = hrp.CFrame.lookVector,
-                    [2] = tonumber(autoStealPower),
-                    [3] = false,
-                    [4] = false,
-                    [5] = false,
-                    [6] = false,
-                    [7] = false,
-                    [8] = "straight",
-                    [9] = false,
-                    [10] = Color3.new(0, 0, 1),
-                    [11] = 13,
-                    [12] = false,
-                    [13] = false,
-                    [14] = false,
-                    [15] = false,
-                    [16] = false,
-                    [17] = false,
-                    [18] = false,
-                    [20] = false,
-                    [22] = 0.07697121581062674,
-                    [23] = false
-                }
-        
-                game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
-
-                local newAnim = Instance.new("Animation")
-                newAnim.AnimationId = "rbxassetid://12830711336"
-
-                humanoid:LoadAnimation(newAnim):Play()
-            elseif not autoStealLegit and stealTouching then
-                local args = {
-                    [1] = hrp.CFrame.lookVector,
-                    [2] = tonumber(autoStealPower),
-                    [3] = false,
-                    [4] = false,
-                    [5] = false,
-                    [6] = false,
-                    [7] = false,
-                    [8] = "straight",
-                    [9] = false,
-                    [10] = Color3.new(0, 0, 1),
-                    [11] = 13,
-                    [12] = false,
-                    [13] = false,
-                    [14] = false,
-                    [15] = false,
-                    [16] = false,
-                    [17] = false,
-                    [18] = false,
-                    [20] = false,
-                    [22] = 0.07697121581062674,
-                    [23] = false
-                }
-        
-                game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
-            end
-        end
-    end
-end)
-
-stealHitbox.TouchEnded:Connect(function(hit)
-    if hit.Name == "Ball" then
-        stealTouching = false
-    end
-end)
-
-workspace:WaitForChild("BallFolder"):WaitForChild("Ball"):GetAttributeChangedSignal("breakkick"):Connect(function()
-    if workspace:WaitForChild("BallFolder"):WaitForChild("Ball"):GetAttribute("breakkick") == false and stealTouching then
-        local hit = workspace:WaitForChild("BallFolder"):WaitForChild("Ball")
-
-        if autoSteal and (hit:GetAttribute("kickiframes") ~= player.Name and not hit:GetAttribute("kickiframes") ~= tostring(player.Team) and hit:GetAttribute("iframes") ~= player.Name and not hit:GetAttribute("iframes") ~= tostring(player.Team)) then
-            if autoStealLegit and stealTouching then
-                local args = {
-                    [1] = hrp.CFrame.lookVector,
-                    [2] = tonumber(autoStealPower),
-                    [3] = false,
-                    [4] = false,
-                    [5] = false,
-                    [6] = false,
-                    [7] = false,
-                    [8] = "straight",
-                    [9] = false,
-                    [10] = Color3.new(0, 0, 1),
-                    [11] = 13,
-                    [12] = false,
-                    [13] = false,
-                    [14] = false,
-                    [15] = false,
-                    [16] = false,
-                    [17] = false,
-                    [18] = false,
-                    [20] = false,
-                    [22] = 0.07697121581062674,
-                    [23] = false
-                }
-        
-                game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
-
-                local newAnim = Instance.new("Animation")
-                newAnim.AnimationId = "rbxassetid://12830711336"
-
-                humanoid:LoadAnimation(newAnim):Play()
-            elseif not autoStealLegit and stealTouching then
-                local args = {
-                    [1] = hrp.CFrame.lookVector,
-                    [2] = tonumber(autoStealPower),
-                    [3] = false,
-                    [4] = false,
-                    [5] = false,
-                    [6] = false,
-                    [7] = false,
-                    [8] = "straight",
-                    [9] = false,
-                    [10] = Color3.new(0, 0, 1),
-                    [11] = 13,
-                    [12] = false,
-                    [13] = false,
-                    [14] = false,
-                    [15] = false,
-                    [16] = false,
-                    [17] = false,
-                    [18] = false,
-                    [20] = false,
-                    [22] = 0.07697121581062674,
-                    [23] = false
-                }
-        
-                game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
-            end
-        end
-    end
-end)
+function getAuraColor()
+	return Color3.new(character.AuraColour.Red.Value, character.AuraColour.Green.Value, character.AuraColour.Blue.Value)
+end
 
 kickHitbox.TouchEnded:Connect(function(hit)
     if hit.Name == "Ball" then
@@ -452,6 +306,91 @@ game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
             character:TranslateBy(humanoid.MoveDirection * speedMultiplier * game:GetService("RunService").Heartbeat:Wait() * 10)
         end
     end 
+end)
+
+game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+    if not autoSteal then return end
+
+    local region = Region3.new(stealHitbox.Position - stealHitbox.Size / 2, stealHitbox.Position + stealHitbox.Size / 2)
+    local parts = workspace:FindPartsInRegion3(region, stealHitbox, math.huge)
+
+    for _, hit in ipairs(parts) do
+        if hit.Name == "Ball" then
+            local validKickFrames = hit:GetAttribute("kickiframes") ~= player.Name and
+                                    hit:GetAttribute("kickiframes") ~= tostring(player.Team)
+            local validIFrames = hit:GetAttribute("iframes") ~= player.Name and
+                                 hit:GetAttribute("iframes") ~= tostring(player.Team)
+            local validOtherAttributes = hit:GetAttribute("iframes") ~= "none" and
+                                         hit:GetAttribute("player") ~= player.Name and
+                                         hit:GetAttribute("team") ~= tostring(player.Team)
+
+            if validKickFrames and validIFrames and validOtherAttributes then
+                if autoStealLegit then
+                    for _, anim in ipairs(humanoid.Animator:GetPlayingAnimationTracks()) do
+                        if tostring(anim.Animation) == "Animation" then
+                            return
+                        end
+                    end
+
+                    local newAnim = Instance.new("Animation")
+                    newAnim.AnimationId = "rbxassetid://12830711336"
+                    humanoid:LoadAnimation(newAnim):Play()
+
+                    local args = {
+                        [1] = hrp.CFrame.lookVector,
+                        [2] = tonumber(autoStealPower),
+                        [3] = false,
+                        [4] = false,
+                        [5] = false,
+                        [6] = false,
+                        [7] = false,
+                        [8] = "straight",
+                        [9] = false,
+                        [10] = getAuraColor(),
+                        [11] = 13,
+                        [12] = false,
+                        [13] = false,
+                        [14] = false,
+                        [15] = false,
+                        [16] = false,
+                        [17] = false,
+                        [18] = false,
+                        [20] = false,
+                        [22] = 0.07697121581062674,
+                        [23] = false
+                    }
+
+                    game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
+                else
+                    local args = {
+                        [1] = hrp.CFrame.lookVector,
+                        [2] = tonumber(autoStealPower),
+                        [3] = false,
+                        [4] = false,
+                        [5] = false,
+                        [6] = false,
+                        [7] = false,
+                        [8] = "straight",
+                        [9] = false,
+                        [10] = getAuraColor(),
+                        [11] = 13,
+                        [12] = false,
+                        [13] = false,
+                        [14] = false,
+                        [15] = false,
+                        [16] = false,
+                        [17] = false,
+                        [18] = false,
+                        [20] = false,
+                        [22] = 0.07697121581062674,
+                        [23] = false
+                    }
+
+                    game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
+                end
+            end
+        end
+    end
 end)
 
 if not hookmetamethod then 
@@ -700,6 +639,10 @@ if hookmetamethod and getnamecallmethod then
         end
     
         if method == 1 then
+            repeat
+                wait(0.3)
+            until workspace:FindFirstChild("BallFolder"):FindFirstChild("Ball")
+            
             game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, workspace.BallFolder.Ball.CFrame.Position)
         else
             game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, playerPosition)
@@ -736,6 +679,10 @@ if hookmetamethod and getnamecallmethod then
             if isDribbleAnywhere then
                 dribble(1)
             elseif isDribbleExtender and dribbleExtenderValue >= 0 and (hrp.CFrame.Position - workspace.BallFolder.Ball.CFrame.Position).Magnitude <= dribbleExtenderValue then
+                repeat
+                    wait(0.3)
+                until workspace:FindFirstChild("BallFolder"):FindFirstChild("Ball")
+                
                 dribble(1)
             end
 
@@ -981,6 +928,4 @@ local _autoStealLegitToggle = BallControlTab:CreateToggle({
 
 --[[ TODO
     PRIO LOW: add support for multiple traits and weapons
-    PRIO HIGH: try out a faster touched alternative for auto steal so no ankle breaks
-    PRIO HIGH: fix line 337 not working. it should be kicking after breakkick is done
 --]]
