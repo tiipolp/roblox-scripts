@@ -9,6 +9,7 @@ local humanoid = character:WaitForChild("Humanoid")
 local hrp = character:WaitForChild("HumanoidRootPart")
 
 local uis = game:GetService("UserInputService")
+local cs = game:GetService("CollectionService")
 
 local touching = false
 local autoSteal = false
@@ -36,6 +37,7 @@ local MainWindow = Rayfield:CreateWindow({
 local BallControlTab = MainWindow:CreateTab("Ball Control", 4483362458)
 local MovementTab = MainWindow:CreateTab("Movement", 4483362458)
 local ShootingTab = MainWindow:CreateTab("Shooting", 4483362458)
+local TraitTab = MainWindow:CreateTab("Traits", 4483362458)
 
 function bitEqual(a, b)
     if type(a) ~= type(b) then
@@ -441,6 +443,34 @@ if hookfunction and hookmetamethod then
         end
         return oldhmmnc(self, ...)
     end)
+
+    local excludeThisTrait = player.Backpack.Trait:GetChildren()[1]
+
+    function traitHandler(traits)
+        local traitFolder = player.Backpack:FindFirstChild("Trait")
+        
+        local traitSet = {}
+        for _, traitName in pairs(traits) do
+            traitSet[traitName] = true
+        end
+
+        for _, existingTrait in ipairs(traitFolder:GetChildren()) do
+            if not traitSet[existingTrait.Name] and existingTrait.Name ~= excludeThisTrait then
+                existingTrait:Destroy()
+            else
+                traitSet[existingTrait.Name] = nil
+            end
+        end
+
+        local allTraits = game:GetService("ReplicatedStorage").Specs.Traits
+        for traitName, _ in pairs(traitSet) do
+            local trait = allTraits:FindFirstChild(traitName)
+            if trait then
+                local clonedTrait = trait:Clone()
+                clonedTrait.Parent = traitFolder
+            end
+        end
+    end
 end
 
 if not getgc then
@@ -926,6 +956,67 @@ local _autoStealLegitToggle = BallControlTab:CreateToggle({
     end,
 })
 
+local _antiJumpFatigueToggle = MovementTab:CreateToggle({
+    Name = "Anti Jump Fatigue",
+    CurrentValue = false,
+    Flag = "anti_jump_fatigue_toggle",
+    Callback = function(Value)
+        cs:GetInstanceAddedSignal("JumpFatigue"):Connect(function(changed)
+            if changed == character and Value then
+                cs:RemoveTag(character, "JumpFatigue")
+            end
+        end)
+    end,
+})
+
+local _jumpPowerSlider = MovementTab:CreateSlider({
+    Name = "Jump Power (Default: " .. humanoid.JumpHeight .. ")",
+    Range = {0, 30},
+    Increment = 0.5,
+    Suffix = "",
+    CurrentValue = humanoid.JumpHeight,
+    Flag = "jump_power_slider",
+    Callback = function(Value)
+        humanoid.UseJumpPower = true
+
+        cs:GetInstanceAddedSignal("JumpFatigue"):Connect(function(changed)
+            if changed == character then
+                humanoid.UseJumpPower = false
+            end
+        end)
+
+        cs:GetInstanceRemovedSignal("JumpFatigue"):Connect(function(changed)
+            if changed == character then
+                humanoid.UseJumpPower = true
+            end
+        end)
+w
+        humanoid.JumpPower = 6.410352941 * Value
+    end,
+})
+
+local _giveTraitDropdown = TraitTab:CreateDropdown({
+    Name = "Give Trait",
+    Options = (function()
+        local traits = {}
+        for _, trait in pairs(game:GetService("ReplicatedStorage").Specs.Traits:GetChildren()) do
+            if player.Backpack:FindFirstChild(trait.Name) or trait:GetAttribute("activational") == true or trait:GetAttribute("rarity") == "exclusive" then
+                continue
+            else
+                table.insert(traits, trait.Name)
+            end
+        end
+        return traits
+    end)(),
+    MultipleOptions = true,
+    Flag = "give_trait_dropdown",
+    Callback = function(Options)
+        traitHandler(Options)
+    end,
+})
+
 --[[ TODO
-    PRIO LOW: add support for multiple traits and weapons
+    PRIO MID: add support for multiple traits and weapons
+     -- i added traits but idk if they work, test it out.
+    PRIO LOW: add support for exclusive traits
 --]]
