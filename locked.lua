@@ -990,7 +990,7 @@ local _jumpPowerSlider = MovementTab:CreateSlider({
                 humanoid.UseJumpPower = true
             end
         end)
-w
+
         humanoid.JumpPower = 6.410352941 * Value
     end,
 })
