@@ -1,6 +1,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local iframeHighlightEnabled = false
+
 local kickHighlightEnabled = false
 
 local player = game:GetService("Players").LocalPlayer
@@ -15,11 +16,16 @@ local COLLECTION_SERVICE = game:GetService("CollectionService")
 local USER_INPUT_SERVICE = game:GetService("UserInputService")
 
 local touching = false
+
 local autoSteal = false
 local autoStealLegit = false
 local autoStealPower = 150
+local lastStealAttempt = 0
+
 local antiSteal = false
 local antiStealHitbox = 30
+local lastAntiStealAttempt = 0
+
 local gravity = 0.5 * -workspace.Gravity
 
 local MainWindow = Rayfield:CreateWindow({
@@ -57,24 +63,318 @@ if game.PlaceId == 12276235857 then
         end,
     })
 
+    LobbyTab:CreateDivider()
+
+    local whatToRoll
+    
+    local customization = player.PlayerGui.Build.NewCustomise
+
+    local weaponRollingFor = nil
+    local weaponRolled = nil
+
+    local heightInput = nil
+    local heightInput2 = nil
+    local heightCompare = nil
+
+
+    function heightToInches(heightStr)
+        local feet, inches = heightStr:match("(%d+)'(%d*)")
+    
+        feet = tonumber(feet) or 0
+        inches = tonumber(inches) or 0
+    
+        local totalInches = (feet * 12) + inches
+        return totalInches
+    end
+    
+    local traitRollingFor = nil
+    local traitRolled = customization.AbilitiesSlide.TraitReroll
+
+    local flowBuffPercentage = 0
+    local flowBuffType = nil
+
     local _autoRollDropdown = LobbyTab:CreateDropdown({
         Name = "Auto Roll",
         Options = {"Weapon", "Trait", "Height", "Face", "Flow Type", "Flow Buff", "Flow Aura"},
-        CurrentOption = "Weapon",
-        Flag = "auto_roll_dropdown",
+        CurrentOption = "None",
         Callback = function(Value)
-            
+            whatToRoll = Value
         end,
     })
 
+    game.ReplicatedStorage.rerolls.specreroll.OnClientEvent:Connect(function(weapon, idk)
+        weaponRolled = tostring(weapon)
+        print(weaponRolled)
+    end)
+
+    local _startRollingToggle
+
+    _startRollingToggle = LobbyTab:CreateToggle({
+        Name = "Start Rolling",
+        CurrentValue = false,
+        Callback = function(Value)
+            if whatToRoll[1] == "Weapon" then
+                while _startRollingToggle.CurrentValue do
+                    if weaponRollingFor == nil then
+                        _startRollingToggle:Set(false)
+                        break
+                    end
+
+                    game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("specreroll"):FireServer()
+                    
+
+                    wait(0.3)
+
+                    for i,v in weaponRollingFor do                        
+                        if weaponRolled == nil or weaponRolled == v or game:GetService("ReplicatedStorage").Specs:WaitForChild((weaponRolled:lower():gsub("(%a)(%w*)", function(a, b) return a:upper() .. b end))):GetAttribute("rarity") == v then
+                            _startRollingToggle:Set(false)
+                            break
+                        end
+                    end
+                end
+            elseif whatToRoll[1] == "Trait" then
+                while _startRollingToggle.CurrentValue do
+                    if traitRollingFor == nil then
+                        _startRollingToggle:Set(false)
+                        break
+                    end
+
+                    game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("traitreroll"):FireServer()
+
+
+                    wait(0.3)
+
+                    for i,v in traitRollingFor do
+                        if traitRolled.Text == v or game:GetService("ReplicatedStorage").Specs.Traits:WaitForChild((traitRolled.Text:lower():gsub("(%a)(%w*)", function(a, b) return a:upper() .. b end))):GetAttribute("rarity") == v then
+                            _startRollingToggle:Set(false)
+                            break
+                        end
+                    end
+                end
+            elseif whatToRoll[1] == "Height" then
+                while _startRollingToggle.CurrentValue do
+                    if heightInput == nil or (heightInput2 == nil and heightCompare[1] == "Range (height1 - height2)") or heightCompare[1] == nil then
+                        _startRollingToggle:Set(false)
+                        break
+                    end
+
+                    game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("heightreroll"):FireServer()
+                    
+                    wait(0.3)
+
+                    local heightInput1 = heightInput
+                    local heightInput2 = heightInput2
+                    local height2 = customization.PhysicalSlide.Reroll.Text
+
+                    if heightCompare[1] == "<" then
+                        if heightToInches(height2) < heightToInches(heightInput1) then
+                            _startRollingToggle:Set(false)
+                            break
+                        end
+                    elseif heightCompare[1] == ">" then
+                        if heightToInches(height2) > heightToInches(heightInput1) then
+                            _startRollingToggle:Set(false)
+                            break
+                        end
+
+                    elseif heightCompare[1] == ">=" then
+                        if heightToInches(height2) >= heightToInches(heightInput1) then
+                            _startRollingToggle:Set(false)
+                            break
+
+                        end
+                    elseif heightCompare[1] == "<=" then
+                        if heightToInches(height2) <= heightToInches(heightInput1) then
+                            _startRollingToggle:Set(false)
+                            break
+
+                        end
+                    elseif heightCompare[1] == "=" then
+                        if heightToInches(height2) == heightToInches(heightInput1) then
+                            _startRollingToggle:Set(false)
+                            break
+
+                        end
+                    elseif heightCompare[1] == "Range (height1 - height2)" then
+                        if heightToInches(height2) >= heightToInches(heightInput1) and heightToInches(height2) <= heightToInches(heightInput2) then
+                            _startRollingToggle:Set(false)
+                            break
+                        end
+                    end
+                end
+            elseif whatToRoll[1] == "Flow Buff" then
+                while _startRollingToggle.CurrentValue do
+                    if flowBuffPercentage == nil or flowBuffType == nil then
+                        _startRollingToggle:Set(false)
+                        break
+                    end
+
+                    game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("buffreroll"):FireServer()
+
+                    wait(0.1)
+
+                    if tonumber(string.match(customization.FlowSlide.buffreroll.Text, "%d+%.?%d*")) >= flowBuffPercentage or whatToRoll[1] ~= "Flow Buff" then
+                        if #flowBuffType >= 1 then
+                            for i,v in flowBuffType do
+                                if string.lower(customization.FlowSlide.buffreroll.Text:gsub("[^a-zA-Z]", "")) == string.lower(v) then
+                                    _startRollingToggle:Set(false)
+                                    break
+                                end
+                            end
+                        else
+                            _startRollingToggle:Set(false)
+
+                            break
+                        end
+                    end
+                end
+            end
+        end,
+    })
+    
+    LobbyTab:CreateDivider()
+
+    local _weaponDropdown = LobbyTab:CreateDropdown({
+        Name = "Weapon",
+        Options = (function()
+            local finalList = {}
+            for _,v in game:GetService("ReplicatedStorage").Specs:GetChildren() do
+                if v:IsA("Folder") == false then
+                    table.insert(finalList, v.Name)
+                end
+            end
+
+            table.sort(finalList)
+
+            table.insert(finalList, 1, "unique")
+            table.insert(finalList, 2, "legendary")
+            table.insert(finalList, 3, "exotic")
+            table.insert(finalList, 4, "rare")
+            table.insert(finalList, 5, "common")
+
+            return finalList
+        end)(),
+        MultipleOptions = true,
+        CurrentOption = "",
+        Callback = function(Value)
+            weaponRollingFor = Value
+        end,
+
+    })
+    
+    local _traitDropdown = LobbyTab:CreateDropdown({
+        Name = "Trait",
+        Options = (function()
+            local finalList = {}
+            for _,v in game:GetService("ReplicatedStorage").Specs.Traits:GetChildren() do
+                table.insert(finalList, v.Name)
+            end
+
+            table.sort(finalList)
+
+            table.insert(finalList, 1, "legendary")
+            table.insert(finalList, 2, "exotic")
+            table.insert(finalList, 3, "rare")
+            table.insert(finalList, 4, "common")
+
+            return finalList
+        end)(),
+        CurrentOption = "",
+        MultipleOptions = true,
+        Callback = function(Value)
+            traitRollingFor = Value
+        end,
+    })
+
+    LobbyTab:CreateDivider()
+    LobbyTab:CreateLabel("Height must be 5'3 - 6'3, height format looks like: feet'inches")
+
+    local _heightInput
+    local _heightInput2
+
+    _heightInput = LobbyTab:CreateInput({
+        Name = "Height",
+        PlaceholderText = "Read label for conditions",
+        CurrentValue = "",
+        Callback = function(Value)
+            if heightCompare ~= nil then
+                if heightToInches(Value) <= 75 and heightToInches(Value) >= 63 and #Value == 3 then
+                    heightInput = Value
+                else
+                    heightInput = nil
+                    _heightInput:Set("Invalid height")
+                end
+            else
+                heightInput = nil
+                _heightInput:Set("No condition selected")
+            end
+        end,
+
+    })
+
+    _heightInput2 = LobbyTab:CreateInput({
+        Name = "Height 2 (Only needed for range)",
+        PlaceholderText = "Read label for conditions",
+        CurrentValue = "",
+        Callback = function(Value)
+            if heightCompare[1] ~= "Range (height1 - height2)" then
+                heightInput2 = nil
+                _heightInput2:Set("Condition is not range")
+            end
+
+            if heightToInches(Value) <= 75 and heightToInches(Value) >= 63 and #Value == 3 then
+                heightInput2 = Value
+            else
+                heightInput2 = nil
+                _heightInput2:Set("Invalid height")
+            end
+        end,
+    })
+
+    _heightCompareDropdown = LobbyTab:CreateDropdown({
+        Name = "Height Condition",
+        Options = {"<", ">", ">=", "<=", "=", "Range (height1 - height2)"},
+        CurrentOption = "",
+        Callback = function(Value)
+            heightCompare = Value
+        end,
+    })
+
+    LobbyTab:CreateDivider()
+
+    local _flowBuffSlider = LobbyTab:CreateSlider({
+        Name = "Flow Buff Percentage",
+        Range = {0, 15},
+        Increment = 0.1,
+        Suffix = "% or more",
+        CurrentValue = 0,
+        Callback = function(Value)
+            flowBuffPercentage = Value
+        end,
+    })
+
+    local _flowBuffTypeDropdown = LobbyTab:CreateDropdown({
+        Name = "Flow Buff Type",
+        Options = {"Speed", "Hitbox", "Power", "Cooldown", "Stamina"},
+        CurrentOption = "",
+        MultipleOptions = true,
+        Callback = function(Value)
+            flowBuffType = Value
+        end,
+    })
+
+    LobbyTab:CreateDivider()
+    
+
     wait(9999999)
+
 end
 
 local BallControlTab = MainWindow:CreateTab("Ball Control", 4483362458)
 local MovementTab = MainWindow:CreateTab("Movement", 4483362458)
 local ShootingTab = MainWindow:CreateTab("Shooting", 4483362458)
 local DribbleTab = MainWindow:CreateTab("Dribble Moves", 4483362458)
-local TraitTab = MainWindow:CreateTab("Traits", 4483362458)
+local CharacterTab = MainWindow:CreateTab("Character", 4483362458)
 local GoalKeeperTab = MainWindow:CreateTab("GoalKeeper", 4483362458)
 
 function bitEqual(a, b)
@@ -271,6 +571,8 @@ local stealHitbox = kickHitbox:Clone()
 stealHitbox.Parent = character
 stealHitbox.Name = "StealHitbox"
 
+BallControlTab:CreateSection("Visuals")
+
 local _iframeHighlightToggle = BallControlTab:CreateToggle({
     Name = "IFrame Highlighting",
     CurrentValue = false,
@@ -324,6 +626,8 @@ end)
 local tpwalking = false
 local speedMultiplier = 0
 
+MovementTab:CreateSection("Speed")
+
 local _speedToggle = MovementTab:CreateToggle({
     Name = "Speed Hack",
     CurrentValue = false,
@@ -363,9 +667,21 @@ RUN_SERVICE.Heartbeat:Connect(function(deltaTime)
             if found ~= player and found.Character and found.Character:FindFirstChild("HumanoidRootPart") and found.Team ~= player.Team and ball:GetAttribute("player") == player.Name and ball:GetAttribute("team") ~= tostring(found.Team) then
                 local distance = (found.Character.HumanoidRootPart.Position - ball.Position).Magnitude
                 local distFromPlayer = (hrp.Position - ball.Position).Magnitude
-                if distance <= antiStealHitbox and distFromPlayer <= 13 and player.PlayerGui.GeneralGUI.CurrentPower.PWR.Value == 0 then
+                if distance <= antiStealHitbox and distFromPlayer <= 13 and player.PlayerGui.GeneralGUI.CurrentPower.PWR.Value == 0 and character.Ragdoll.Value == false and os.time() - lastAntiStealAttempt > 0.5 then
                     for _, track in ipairs(found.Character.Humanoid.Animator:GetPlayingAnimationTracks()) do
                         if track.Animation.AnimationId == "rbxassetid://13082657041" or track.Animation.AnimationId == "rbxassetid://12830711336" or track.Animation.AnimationId == "rbxassetid://12994376714" then
+                            for _, track2 in ipairs(character.Humanoid.Animator:GetPlayingAnimationTracks()) do
+                                if track2.Animation.AnimationId == "rbxassetid://12830711336"
+                                   or track2.Animation.AnimationId == "rbxassetid://16013434132"
+                                   or track2.Animation.AnimationId == "rbxassetid://13082657041"
+                                   or track2.Animation.AnimationId == "rbxassetid://12933738311"
+                                   or track2.Animation.AnimationId == "rbxassetid://13392854857" then
+                                    return
+                                end
+                            end
+
+                            lastAntiStealAttempt = os.time()
+
                             local newAnim = Instance.new("Animation")
                             newAnim.AnimationId = "rbxassetid://12830711336"
                             character.Humanoid:LoadAnimation(newAnim):Play()
@@ -394,12 +710,13 @@ RUN_SERVICE.Heartbeat:Connect(function(deltaTime)
                             }
                             
                             game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
-                            
-                            wait(0.13)
-                            
-                            dribble()
-                            wait(0.1)
-                            dribble()
+
+                            task.wait(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue() / 1000)
+
+                            for _ = 1, 3 do
+                                dribble()
+                                task.wait(0.1)
+                            end
                             break
                         end
                     end
@@ -427,7 +744,19 @@ RUN_SERVICE.Heartbeat:Connect(function(deltaTime)
                                             hit:GetAttribute("team") ~= tostring(player.Team)
 
                 if validKickFrames and validIFrames and validOtherAttributes then
-                    if autoStealLegit and player.PlayerGui.GeneralGUI.CurrentPower.PWR.Value == 0 then
+                    if autoStealLegit and player.PlayerGui.GeneralGUI.CurrentPower.PWR.Value == 0 and character.Ragdoll.Value == false and os.time() - lastStealAttempt > 0.5 then
+                        for _, track in ipairs(humanoid.Animator:GetPlayingAnimationTracks()) do
+                            if track.Animation.AnimationId == "rbxassetid://12830711336"
+                               or track.Animation.AnimationId == "rbxassetid://16013434132"
+                               or track.Animation.AnimationId == "rbxassetid://13082657041" 
+                               or track.Animation.AnimationId == "rbxassetid://12933738311" 
+                               or track.Animation.AnimationId == "rbxassetid://13392854857" then
+                                return
+                            end
+                        end
+
+                        lastStealAttempt = os.time()
+
                         local newAnim = Instance.new("Animation")
                         newAnim.AnimationId = "rbxassetid://12830711336"
                         humanoid:LoadAnimation(newAnim):Play()
@@ -608,7 +937,6 @@ if not debug.setconstant then
 end
 
 if islclosure and getgc and debug.getconstants and debug.setconstant then
-    MovementTab:CreateLabel("The functions below may crash on some executors (unlikely)", "arrow-down")
     local staminaFunc
     local regen
     local degen
@@ -727,8 +1055,6 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
             end
         end,
     })
-
-    MovementTab:CreateLabel("The functions above may crash on some executors (unlikely)", "arrow-up")
 end
 
 if hookmetamethod and getnamecallmethod then
@@ -744,19 +1070,18 @@ if hookmetamethod and getnamecallmethod then
             [Enum.KeyCode.D] = hrp.CFrame.RightVector
         }
     
-        local inf = (-1 / 0)
+        local highestDot = -math.huge
         local wPressed
     
         if USER_INPUT_SERVICE:IsKeyDown(Enum.KeyCode.W) then
-            playerLookVector = hrp.CFrame.lookVector
             wPressed = Enum.KeyCode.W
         else
             for keycode, vectors in pairs(keycodes) do
                 if USER_INPUT_SERVICE:IsKeyDown(keycode) then
                     local dot = vectors:Dot(hrp.Velocity.Unit)
-                    if inf < dot then
+                    if dot > highestDot then
                         wPressed = keycode
-                        inf = dot
+                        highestDot = dot
                     end
                 end
             end
@@ -771,9 +1096,9 @@ if hookmetamethod and getnamecallmethod then
                 wait()
             until workspace:FindFirstChild("BallFolder"):FindFirstChild("Ball")
             
-            game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, workspace.BallFolder.Ball.CFrame.Position)
+            game:GetService("ReplicatedStorage").Dribble:FireServer(playerLookVector, playerVelocity, workspace.BallFolder.Ball.CFrame.Position)
         else
-            game:GetService("ReplicatedStorage"):WaitForChild("Dribble"):FireServer(playerLookVector, playerVelocity, playerPosition)
+            game:GetService("ReplicatedStorage").Dribble:FireServer(playerLookVector, playerVelocity, playerPosition)
         end
     end
 
@@ -828,11 +1153,13 @@ if hookmetamethod and getnamecallmethod then
         end
 
         return oldNamecall(self, unpack(args))
-    end) 
+    end)
 
     local _dribbeAnywhereToggle
     local _dribbleExtenderSlider
     local _dribbleExtenderToggle
+
+    BallControlTab:CreateSection("Dribble")
 
     _dribbeAnywhereToggle = BallControlTab:CreateToggle({
         Name = "Dribble The Ball From Literally Anywhere",
@@ -864,6 +1191,8 @@ if hookmetamethod and getnamecallmethod then
         end,
     })
 
+    MovementTab:CreateSection("Ragdoll")
+
     local _customRagdollTime = MovementTab:CreateSlider({
         Name = "Custom Ragdoll Time (Default: " .. tostring((player.Backpack.Trait:FindFirstChild("Ripper") and 4.5 or 1.5) - (player.Backpack:FindFirstChild("Voracious") and player.PlayerGui.GeneralGUI.CurrentStamina.STAM.Value > 5 and 1 or 0)) .. "s)",
         Range = {0, 6},
@@ -887,6 +1216,8 @@ if hookmetamethod and getnamecallmethod then
 
     local kickPowerLimit = 3
     local kickPowerScaler = 0.1
+
+    ShootingTab:CreateSection("Kick Power")
 
     local _kickModToggle = ShootingTab:CreateToggle({  
         Name = "Kick Power Modifier",
@@ -940,6 +1271,8 @@ end
 local metavisonConnection
 
 local metaVisionLandingPart
+
+ShootingTab:CreateSection("Predictors")
 
 local _grantMetavisionToggle = ShootingTab:CreateToggle({
     Name = "Give Metavision Ball Predictor",
@@ -998,6 +1331,79 @@ local _grantMetavisionToggle = ShootingTab:CreateToggle({
     end,
 })
 
+local trajectoryFolder
+
+function updateTrajectory(ball)
+    if not workspace.BallFolder:WaitForChild("Ball"):FindFirstChild("TrajectoryPath") then
+        trajectoryFolder = Instance.new("Folder")
+        trajectoryFolder.Name = "TrajectoryPath"
+        trajectoryFolder.Parent = ball
+    else
+        trajectoryFolder = workspace.BallFolder:WaitForChild("Ball"):FindFirstChild("TrajectoryPath")
+    end
+    
+    local velocity = ball.AssemblyLinearVelocity
+    local position = ball.Position
+    local velocityY = velocity.Y
+    local positionY = position.Y
+
+    local discriminant = velocityY^2 - 4 * gravity * (positionY - 1.1)
+    
+    local sqrtDiscriminant = math.sqrt(discriminant)
+    local time1 = (-velocityY + sqrtDiscriminant) / (2 * gravity)
+    local time2 = (-velocityY - sqrtDiscriminant) / (2 * gravity)
+    local impactTime = math.max(time1, time2)
+
+    local velocityX = velocity.X
+    local velocityZ = velocity.Z
+
+    for _, part in pairs(trajectoryFolder:GetChildren()) do
+        part:Destroy()
+    end
+
+    local timeStep = 0.03
+    for t = 0, impactTime, timeStep do
+        local currentPosition = position + Vector3.new(velocityX, velocityY, velocityZ) * t + Vector3.new(0, gravity, 0) * t^2
+
+        if currentPosition.Y <= 1.5 then break end
+
+        local marker = Instance.new("Part")
+        marker.Size = Vector3.new(2, 2, 2)
+        marker.Color = Color3.new(1, 0, 0)
+        marker.Shape = Enum.PartType.Ball
+        marker.Anchored = true
+        marker.CanCollide = false
+        marker.CFrame = CFrame.new(currentPosition)
+        marker.Transparency = 0.5
+        marker.Parent = trajectoryFolder
+    end
+end
+
+local trajectoryConnection
+
+local _grantTrajectoryPredictionToggle = ShootingTab:CreateToggle({
+    Name = "Show Ball Trajectory",
+    CurrentValue = false,
+    Flag = "show_ball_trajectory_toggle",
+    Callback = function(Value)
+        if Value and not trajectoryConnection then
+            trajectoryConnection = RUN_SERVICE.RenderStepped:Connect(function()
+                local ball = workspace:WaitForChild("BallFolder"):FindFirstChild("Ball")
+                if ball then
+                    updateTrajectory(ball)
+                end
+            end)
+        else
+            if trajectoryConnection then
+                trajectoryConnection:Disconnect()
+                trajectoryConnection = nil
+            end
+        end
+    end,
+})
+
+BallControlTab:CreateSection("Stealing")
+
 local autoStealHitbox = Vector3.new(30 * 0.4, 15, 30 * 0.4)
 
 local _autoStealToggle = BallControlTab:CreateToggle({
@@ -1044,7 +1450,6 @@ local _autoStealLegitToggle = BallControlTab:CreateToggle({
         autoStealLegit = Value
     end,
 })
-
 	
 local _doAirDribble = DribbleTab:CreateKeybind({
     Name = "Do Air Dribble",
@@ -1062,7 +1467,7 @@ local _doAirDribble = DribbleTab:CreateKeybind({
 
         local args = {
             [1] = Vector3.new(0, 1, 0),
-            [2] = 165,
+            [2] = 145,
             [3] = false,
             [4] = false,
             [5] = false,
@@ -1084,13 +1489,12 @@ local _doAirDribble = DribbleTab:CreateKeybind({
         }
         game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
         
-        wait(0.13)
+        task.wait(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue() / 1000)
 
-        dribble()
-        wait(0.05)
-        dribble()
-        wait(0.05)
-        dribble()
+        for _ = 1, 3 do
+            dribble()
+            task.wait(0.1)
+        end
     end,
 })
 
@@ -1151,7 +1555,6 @@ for _, part in ipairs(workspace.Box:GetChildren()) do
     end
 end
 
-local trajectoryFolder
 local ball = workspace:WaitForChild("BallFolder"):WaitForChild("Ball")
 if not ball:FindFirstChild("TrajectoryPath") then
     trajectoryFolder = Instance.new("Folder")
@@ -1345,8 +1748,11 @@ _autoGKToggle = GoalKeeperTab:CreateToggle({
 
 --------------------------------
 
+MovementTab:CreateSection("Jump")
 
-local _antiJumpFatigueToggle = MovementTab:CreateToggle({
+local _antiJumpFatigueToggle
+
+_antiJumpFatigueToggle = MovementTab:CreateToggle({
     Name = "Anti Jump Fatigue",
     CurrentValue = false,
     Flag = "anti_jump_fatigue_toggle",
@@ -1354,7 +1760,7 @@ local _antiJumpFatigueToggle = MovementTab:CreateToggle({
         COLLECTION_SERVICE:RemoveTag(character, "JumpFatigue")
 
         COLLECTION_SERVICE:GetInstanceAddedSignal("JumpFatigue"):Connect(function(changed)
-            if changed == character and Value then
+            if changed == character and _antiJumpFatigueToggle.CurrentValue then
                 COLLECTION_SERVICE:RemoveTag(character, "JumpFatigue")
             end
         end)
@@ -1387,7 +1793,7 @@ local _jumpPowerSlider = MovementTab:CreateSlider({
     end,
 })
 
-local _giveTraitDropdown = TraitTab:CreateDropdown({
+local _giveTraitDropdown = CharacterTab:CreateDropdown({
     Name = "Give Trait",
     Options = (function()
         local traits = {}
@@ -1404,16 +1810,39 @@ local _giveTraitDropdown = TraitTab:CreateDropdown({
     Flag = "give_trait_dropdown",
     Callback = function(Options)
         traitHandler(Options)
+    end,1
+})
+
+CharacterTab:CreateSection("Ego")
+
+local _setEgoSlider = CharacterTab:CreateSlider({
+    Name = "Set Ego",
+    Range = {0, 100},
+    Increment = 1,
+    Suffix = "",
+    CurrentValue = 0,
+    Flag = "set_ego_slider",
+    Callback = function(Value)
+        game:GetService("Players").LocalPlayer.PlayerGui.GeneralGUI.EGO.ego.Value = Value
     end,
 })
+
+local _activateEgoButton = CharacterTab:CreateButton({
+    Name = "Activate Ego",
+    Callback = function()
+        game:GetService("ReplicatedStorage"):WaitForChild("FlowTypes"):WaitForChild("Handle"):WaitForChild("BuffRemote"):FireServer()
+    end,
+})
+
+Rayfield:LoadConfiguration()
 
 --[[ TODO
     PRIO MID: add support for multiple traits and weapons
      -- i added traits but idk if they work, test it out.
     PRIO LOW: add support for exclusive traits
     PRIO LOW: make trait picker better, lotta problems w it and its hard to use
-    PRIO LOW: trajectory path
     PRIO HIGH: fix auto gk PARTIALLY DONE
     PRIO MID: make anti steal better, done maybe idk have to test it out
     PRIO LOW: auto roll everything
+    PRIO MID: player radar/arrow pointer on side of screen
 --]]
