@@ -1,3 +1,7 @@
+queue_on_teleport([[
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/tiipolp/roblox-scripts/refs/heads/main/locked.lua"))()
+]])
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local iframeHighlightEnabled = false
