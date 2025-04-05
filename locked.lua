@@ -9,6 +9,9 @@ local iframeHighlightEnabled = false
 local kickHighlightEnabled = false
 
 local player = game:GetService("Players").LocalPlayer
+
+repeat wait() until player.Character
+
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local hrp = character:WaitForChild("HumanoidRootPart")
