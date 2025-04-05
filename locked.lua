@@ -10,9 +10,9 @@ local kickHighlightEnabled = false
 
 local player = game:GetService("Players").LocalPlayer
 
-repeat wait() until player.Character
+if not player.Character then player.CharacterAdded:Wait() end
 
-local character = player.Character or player.CharacterAdded:Wait()
+local character = player.Character
 local humanoid = character:WaitForChild("Humanoid")
 local hrp = character:WaitForChild("HumanoidRootPart")
 
