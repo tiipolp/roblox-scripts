@@ -141,11 +141,10 @@ if game.PlaceId == 12276235857 then
 
                     game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("traitreroll"):FireServer()
 
-
                     wait(0.3)
 
                     for i,v in traitRollingFor do
-                        if traitRolled.Text == v or game:GetService("ReplicatedStorage").Specs.Traits:WaitForChild((traitRolled.Text:lower():gsub("(%a)(%w*)", function(a, b) return a:upper() .. b end))):GetAttribute("rarity") == v then
+                        if traitRolled.Text:lower() == v:lower() or ((function() for _,c in ipairs(game:GetService("ReplicatedStorage").Specs.Traits:GetChildren()) do if c.Name:lower() == traitRolled.Text:lower() then return c:GetAttribute("rarity"):lower() end end end)() == v:lower()) then
                             _startRollingToggle:Set(false)
                             break
                         end
@@ -1834,6 +1833,171 @@ local _activateEgoButton = CharacterTab:CreateButton({
     end,
 })
 
+CharacterTab:CreateSection("Tracers")
+
+local tracerEnabled = false
+local tracerOrigin = "Bottom"
+local tracerColor = Color3.new(1, 1, 1)
+local tracerTransparency = 0
+local tracerOutlineColor = Color3.new(0, 0, 0)
+local tracerOutlineTransparency = 0.5
+local tracers = {}
+
+local function tracer_cleanup()
+    for _, v in pairs(tracers) do
+        if v.line and v.outline then
+            v.line:Destroy()
+            v.outline:Destroy()
+        end
+    end
+    tracers = {}
+end
+
+local _tracerToggle = CharacterTab:CreateToggle({
+    Name = "Enable Tracers",
+    CurrentValue = false,
+    Flag = "tracer_toggle",
+    Callback = function(Value)
+        tracerEnabled = Value
+        if not Value then tracer_cleanup() end
+    end,
+})
+
+local _tracerOriginDropdown = CharacterTab:CreateDropdown({
+    Name = "Tracer Origin",
+    Options = {"Bottom", "Middle", "Top", "Mouse"},
+    CurrentOption = "Bottom",
+    Callback = function(Value)
+        print(tostring(Value[1]))
+        tracerOrigin = tostring(Value[1])
+    end,
+})
+
+local _tracerColorPicker = CharacterTab:CreateColorPicker({
+    Name = "Tracer Color",
+    Color = Color3.new(1, 1, 1),
+    Callback = function(Value)
+        tracerColor = Value
+    end
+})
+
+local _tracerTransparencySlider = CharacterTab:CreateSlider({
+    Name = "Tracer Transparency",
+    Range = {0, 1},
+    Increment = 0.01,
+    Suffix = "",
+    CurrentValue = 0,
+    Flag = "tracer_transparency",
+    Callback = function(Value)
+        tracerTransparency = Value
+    end,
+})
+
+local _tracerOutlineColorPicker = CharacterTab:CreateColorPicker({
+    Name = "Outline Color",
+    Color = Color3.new(0, 0, 0),
+    Callback = function(Value)
+        tracerOutlineColor = Value
+    end
+})
+
+local _tracerOutlineTransparencySlider = CharacterTab:CreateSlider({
+    Name = "Outline Transparency",
+    Range = {0, 1},
+    Increment = 0.01,
+    Suffix = "",
+    CurrentValue = 0.5,
+    Flag = "tracer_outline_transparency",
+    Callback = function(Value)
+        tracerOutlineTransparency = Value
+    end,
+})
+
+local function tracer_cleanup()
+    for _, tracer in pairs(tracers) do
+        tracer.line:Destroy()
+        tracer.outline:Destroy()
+    end
+    tracers = {}
+end
+
+local originPoints = {
+    Bottom = function() return Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y) end,
+    Middle = function() return workspace.CurrentCamera.ViewportSize / 2 end,
+    Top = function() return Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, 0) end,
+    Mouse = function() return USER_INPUT_SERVICE:GetMouseLocation() end
+}
+
+local function get_origin_point()
+    return originPoints[tracerOrigin]()
+end
+
+RUN_SERVICE.Heartbeat:Connect(function()
+    if not tracerEnabled then return end
+    
+    local currentPlayers = game:GetService("Players"):GetPlayers()
+    local currentPlayerSet = {}
+    local origin = get_origin_point()
+    
+    for _, player in ipairs(currentPlayers) do
+        currentPlayerSet[player] = true
+    end
+    
+    for player in pairs(tracers) do
+        if not currentPlayerSet[player] then
+            tracers[player].line:Destroy()
+            tracers[player].outline:Destroy()
+            tracers[player] = nil
+        end
+    end
+    
+    for _, plr in ipairs(currentPlayers) do
+        if plr == player then continue end
+        
+        local character = plr.Character
+        if not character then continue end
+        
+        local humanoid = character.Humanoid
+        local hrp = character.HumanoidRootPart
+        
+        local position, onScreen = workspace.CurrentCamera:WorldToViewportPoint(hrp.Position)
+        if not onScreen then
+            if tracers[plr] then
+                tracers[plr].line.Visible = false
+                tracers[plr].outline.Visible = false
+            end
+            continue
+        end
+        
+        local screenPosition = Vector2.new(position.X, position.Y)
+        local tracer = tracers[plr]
+        
+        if not tracer then
+            tracer = {
+                outline = Drawing.new("Line"),
+                line = Drawing.new("Line")
+            }
+            tracer.outline.Thickness = 3
+            tracer.line.Thickness = 1
+            tracers[plr] = tracer
+        end
+        
+        -- Update line properties
+        tracer.line.From = origin
+        tracer.line.To = screenPosition
+        tracer.line.Color = tracerColor
+        tracer.line.Transparency = 1 - tracerTransparency
+        tracer.line.Visible = true
+        
+        -- Update outline properties
+        tracer.outline.From = origin
+        tracer.outline.To = screenPosition
+        tracer.outline.Color = tracerOutlineColor
+        tracer.outline.Transparency = 1 - tracerOutlineTransparency
+        tracer.outline.Visible = true
+    end
+end)
+
 Rayfield:LoadConfiguration()
 
 --[[ TODO
@@ -1844,5 +2008,4 @@ Rayfield:LoadConfiguration()
     PRIO HIGH: fix auto gk PARTIALLY DONE
     PRIO MID: make anti steal better, done maybe idk have to test it out
     PRIO LOW: auto roll everything
-    PRIO MID: player radar/arrow pointer on side of screen
 --]]
