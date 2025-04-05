@@ -1867,6 +1867,11 @@ RUN_SERVICE.Heartbeat:Connect(function()
     end
 end)
 
+Rayfield:LoadConfiguration()
+
+queue_on_teleport([[
+    loadstring(game:HttpGet("https://github.com/tiipolp/roblox-scripts/blob/main/locked.lua"))()
+]])
 --[[ TODO
     PRIO MID: add support for multiple traits and weapons
      -- i added traits but idk if they work, test it out.
