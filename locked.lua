@@ -1870,7 +1870,7 @@ end)
 Rayfield:LoadConfiguration()
 
 queue_on_teleport([[
-    loadstring(game:HttpGet("https://github.com/tiipolp/roblox-scripts/blob/main/locked.lua"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/tiipolp/roblox-scripts/refs/heads/main/locked.lua"))()
 ]])
 --[[ TODO
     PRIO MID: add support for multiple traits and weapons
