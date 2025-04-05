@@ -98,136 +98,7 @@ if game.PlaceId == 12276235857 then
         Options = {"Weapon", "Trait", "Height", "Face", "Flow Type", "Flow Buff", "Flow Aura"},
         CurrentOption = "None",
         Callback = function(Value)
-            whatToRoll = Value
-        end,
-    })
-
-    game.ReplicatedStorage.rerolls.specreroll.OnClientEvent:Connect(function(weapon, idk)
-        weaponRolled = tostring(weapon)
-        print(weaponRolled)
-    end)
-
-    local _startRollingToggle
-
-    _startRollingToggle = LobbyTab:CreateToggle({
-        Name = "Start Rolling",
-        CurrentValue = false,
-        Callback = function(Value)
-            if whatToRoll[1] == "Weapon" then
-                while _startRollingToggle.CurrentValue do
-                    if weaponRollingFor == nil then
-                        _startRollingToggle:Set(false)
-                        break
-                    end
-
-                    game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("specreroll"):FireServer()
-                    
-
-                    wait(0.3)
-
-                    for i,v in weaponRollingFor do                        
-                        if weaponRolled == nil or weaponRolled == v or game:GetService("ReplicatedStorage").Specs:WaitForChild((weaponRolled:lower():gsub("(%a)(%w*)", function(a, b) return a:upper() .. b end))):GetAttribute("rarity") == v then
-                            _startRollingToggle:Set(false)
-                            break
-                        end
-                    end
-                end
-            elseif whatToRoll[1] == "Trait" then
-                while _startRollingToggle.CurrentValue do
-                    if traitRollingFor == nil then
-                        _startRollingToggle:Set(false)
-                        break
-                    end
-
-                    game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("traitreroll"):FireServer()
-
-                    wait(0.3)
-
-                    for i,v in traitRollingFor do
-                        if traitRolled.Text:lower() == v:lower() or ((function() for _,c in ipairs(game:GetService("ReplicatedStorage").Specs.Traits:GetChildren()) do if c.Name:lower() == traitRolled.Text:lower() then return c:GetAttribute("rarity"):lower() end end end)() == v:lower()) then
-                            _startRollingToggle:Set(false)
-                            break
-                        end
-                    end
-                end
-            elseif whatToRoll[1] == "Height" then
-                while _startRollingToggle.CurrentValue do
-                    if heightInput == nil or (heightInput2 == nil and heightCompare[1] == "Range (height1 - height2)") or heightCompare[1] == nil then
-                        _startRollingToggle:Set(false)
-                        break
-                    end
-
-                    game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("heightreroll"):FireServer()
-                    
-                    wait(0.3)
-
-                    local heightInput1 = heightInput
-                    local heightInput2 = heightInput2
-                    local height2 = customization.PhysicalSlide.Reroll.Text
-
-                    if heightCompare[1] == "<" then
-                        if heightToInches(height2) < heightToInches(heightInput1) then
-                            _startRollingToggle:Set(false)
-                            break
-                        end
-                    elseif heightCompare[1] == ">" then
-                        if heightToInches(height2) > heightToInches(heightInput1) then
-                            _startRollingToggle:Set(false)
-                            break
-                        end
-
-                    elseif heightCompare[1] == ">=" then
-                        if heightToInches(height2) >= heightToInches(heightInput1) then
-                            _startRollingToggle:Set(false)
-                            break
-
-                        end
-                    elseif heightCompare[1] == "<=" then
-                        if heightToInches(height2) <= heightToInches(heightInput1) then
-                            _startRollingToggle:Set(false)
-                            break
-
-                        end
-                    elseif heightCompare[1] == "=" then
-                        if heightToInches(height2) == heightToInches(heightInput1) then
-                            _startRollingToggle:Set(false)
-                            break
-
-                        end
-                    elseif heightCompare[1] == "Range (height1 - height2)" then
-                        if heightToInches(height2) >= heightToInches(heightInput1) and heightToInches(height2) <= heightToInches(heightInput2) then
-                            _startRollingToggle:Set(false)
-                            break
-                        end
-                    end
-                end
-            elseif whatToRoll[1] == "Flow Buff" then
-                while _startRollingToggle.CurrentValue do
-                    if flowBuffPercentage == nil or flowBuffType == nil then
-                        _startRollingToggle:Set(false)
-                        break
-                    end
-
-                    game:GetService("ReplicatedStorage"):WaitForChild("rerolls"):WaitForChild("buffreroll"):FireServer()
-
-                    wait(0.1)
-
-                    if tonumber(string.match(customization.FlowSlide.buffreroll.Text, "%d+%.?%d*")) >= flowBuffPercentage or whatToRoll[1] ~= "Flow Buff" then
-                        if #flowBuffType >= 1 then
-                            for i,v in flowBuffType do
-                                if string.lower(customization.FlowSlide.buffreroll.Text:gsub("[^a-zA-Z]", "")) == string.lower(v) then
-                                    _startRollingToggle:Set(false)
-                                    break
-                                end
-                            end
-                        else
-                            _startRollingToggle:Set(false)
-
-                            break
-                        end
-                    end
-                end
-            end
+            
         end,
     })
     
@@ -1833,8 +1704,6 @@ local _activateEgoButton = CharacterTab:CreateButton({
     end,
 })
 
-CharacterTab:CreateSection("Tracers")
-
 local tracerEnabled = false
 local tracerOrigin = "Bottom"
 local tracerColor = Color3.new(1, 1, 1)
@@ -1998,8 +1867,6 @@ RUN_SERVICE.Heartbeat:Connect(function()
     end
 end)
 
-Rayfield:LoadConfiguration()
-
 --[[ TODO
     PRIO MID: add support for multiple traits and weapons
      -- i added traits but idk if they work, test it out.
@@ -2008,4 +1875,5 @@ Rayfield:LoadConfiguration()
     PRIO HIGH: fix auto gk PARTIALLY DONE
     PRIO MID: make anti steal better, done maybe idk have to test it out
     PRIO LOW: auto roll everything
+    PRIO MID: player radar/arrow pointer on side of screen
 --]]
