@@ -10,6 +10,8 @@ local kickHighlightEnabled = false
 
 local player = game:GetService("Players").LocalPlayer
 
+repeat wait(1) until player.Character
+
 if not player.Character then player.CharacterAdded:Wait() end
 
 local character = player.Character
