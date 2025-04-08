@@ -8,6 +8,8 @@ local iframeHighlightEnabled = false
 
 local kickHighlightEnabled = false
 
+repeat wait(1) until game:GetService("Players").LocalPlayer
+
 local player = game:GetService("Players").LocalPlayer
 
 repeat wait(1) until player.Character
