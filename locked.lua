@@ -1531,231 +1531,272 @@ local _antiStealHitboxSlider = BallControlTab:CreateSlider({
 })
 
 -- auto gk
+local AUTO_GK_ENABLED = false -- Renamed for clarity within the main script
 
-local goalieAnim = Instance.new("Animation")
-goalieAnim.AnimationId = "rbxassetid://12782895583"
-local anim = character.Humanoid:LoadAnimation(goalieAnim)
+-- Configuration (Consider making these UI elements later)
+local DASH_DISTANCE_GK = 30 -- How far the Q dash travels (in studs)
+local DASH_TRIGGER_DISTANCE_BUFFER_GK = 5 -- How much closer (horizontally) prediction needs to be
+local LOOK_AT_DISTANCE_THRESHOLD_GK = 60 -- How close ball needs to be to look
+local PREDICTION_TIME_AHEAD_GK = 0.25 -- **TUNED: Shorter prediction time (seconds)**
+local MIN_BALL_SPEED_TO_CONSIDER_GK = 15 -- Minimum ball speed (studs/sec)
+local JUMP_HEIGHT_THRESHOLD_GK = 7 -- Predicted height relative to head to jump
+local DASH_COOLDOWN_GK = 1.0 -- Minimum seconds between dashes
+local MIN_FORWARD_DOT_PRODUCT_GK = 0.3 -- How "forward" target needs to be (0=sideways, 1=directly ahead)
 
-local lastDived = 0
+-- State Variables
+local isGKDashing = false -- Renamed GK-specific state
+local lastGKDashTime = 0
+local gkControlsAltered = false -- Track if we've turned AutoRotate off
 
-local closestGoalieBox = nil
-local shortestDistance = math.huge
+-- Ball Validation Function (Uses existing player, hrp, character vars)
+local function isGKBallValidTarget(ballInstance)
+    -- Ensure dependencies exist
+    if not ballInstance or not ballInstance:IsA("BasePart") or not player or not hrp then
+        return false, "Ball or Player HRP invalid"
+    end
 
-for _, part in ipairs(workspace:GetDescendants()) do
-    if part:IsA("BasePart") and string.lower(part.Name) == "nethitbox" then
-        if part.Size.X < 1 and part.Size.Z > 35 then
-            local distance = (part.Position - hrp.Position).Magnitude
-            if distance < shortestDistance then
-                shortestDistance = distance
-                closestGoalieBox = part
+    local velocity = ballInstance.AssemblyLinearVelocity
+    local playerAttribute = ballInstance:GetAttribute("player")
+    local teamAttribute = ballInstance:GetAttribute("team")
+    -- Check all known iframe attributes in this game
+    local iframesAttribute = ballInstance:GetAttribute("iframes")
+    local headeriframesAttribute = ballInstance:GetAttribute("headeriframes")
+    local kickiframesAttribute = ballInstance:GetAttribute("kickiframes")
+
+    -- Check possession (self)
+    if playerAttribute and playerAttribute == player.Name then
+        return false, "Ball possessed by self"
+    end
+
+    -- Check possession (teammate)
+    if teamAttribute and teamAttribute == tostring(player.Team) then
+        return false, "Ball possessed by teammate"
+    end
+
+    -- Check iframes/invincibility while the ball is actively moving
+    if velocity.Magnitude > 1 and
+       ((iframesAttribute and iframesAttribute ~= "none") or
+        (headeriframesAttribute and headeriframesAttribute ~= "none") or
+        (kickiframesAttribute and kickiframesAttribute ~= "none")) then
+        return false, "Ball has iframes and is moving"
+    end
+
+    -- Check minimum speed
+    if velocity.Magnitude < MIN_BALL_SPEED_TO_CONSIDER_GK then
+        return false, "Ball is moving too slowly"
+    end
+
+    -- Check if ball is moving generally towards the player (dot product check)
+    if character and hrp then
+        local ballToPlayerVector = (hrp.Position - ballInstance.Position)
+        if ballToPlayerVector.Magnitude > 0.1 then
+            local ballDirection = velocity.Unit
+            -- Positive dot means velocity has component towards player. Threshold filters sideways/away.
+            if ballDirection:Dot(ballToPlayerVector.Unit) < 0.15 then -- Tune threshold (0 to 1)
+                 return false, "Ball not moving towards player"
             end
         end
     end
+
+    return true, "Ball is a valid target"
 end
 
-closestBox = nil
-shortestDistance = math.huge
+-- Prediction Function (FIXED PHYSICS: Uses workspace.Gravity directly)
+local function predictGKBallPosition(ballInstance, t)
+    if not ballInstance or not ballInstance:IsA("BasePart") then return nil end
 
-for _, part in ipairs(workspace.Box:GetChildren()) do
-    local distance = (part.Position - hrp.Position).Magnitude
-    
-    if distance < shortestDistance then
-        shortestDistance = distance
+    local velocity = ballInstance.AssemblyLinearVelocity
+    local position = ballInstance.Position
+    local currentGravity = workspace.Gravity -- Use actual workspace gravity value
 
-        closestBox = part
+    local predictedX = position.X + velocity.X * t
+    -- Correct physics formula for Y position
+    local predictedY = position.Y + velocity.Y * t - 0.5 * currentGravity * t^2
+    local predictedZ = position.Z + velocity.Z * t
+
+    return Vector3.new(predictedX, predictedY, predictedZ)
+end
+
+-- Dash Function
+local function executeGKDash()
+    if isGKDashing or (tick() - lastGKDashTime < DASH_COOLDOWN_GK) then return end
+
+    isGKDashing = true
+    lastGKDashTime = tick()
+    print("GK: Attempting Dash")
+
+    -- Ensure VIRTUAL_INPUT_MANAGER is accessible
+    if VIRTUAL_INPUT_MANAGER then
+         VIRTUAL_INPUT_MANAGER:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+         task.wait(0.05) -- Brief delay between press and release
+         VIRTUAL_INPUT_MANAGER:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+    else
+        warn("GK: VIRTUAL_INPUT_MANAGER not found!")
+    end
+
+    -- Reset dash state after a short duration
+    task.delay(0.15, function()
+        isGKDashing = false
+    end)
+end
+
+-- Jump Function
+local function executeGKJump()
+    if humanoid then
+        humanoid.Jump = true
+        print("GK: Attempting Jump")
     end
 end
 
-local ball = workspace:WaitForChild("BallFolder"):WaitForChild("Ball")
-if not ball:FindFirstChild("TrajectoryPath") then
-    trajectoryFolder = Instance.new("Folder")
-    trajectoryFolder.Name = "TrajectoryPath"
-    trajectoryFolder.Parent = ball
-else
-    trajectoryFolder = ball:FindFirstChild("TrajectoryPath")
+-- LookAt Function (HORIZONTAL ONLY, manages AutoRotate state)
+local function lookAtGKTarget(targetPosition)
+    if not humanoid or not hrp then return end
+
+    -- Turn off AutoRotate if it's not already off by this script
+    if humanoid.AutoRotate then
+        humanoid.AutoRotate = false
+        gkControlsAltered = true -- Mark that we changed it
+    end
+
+    -- Calculate look direction only on the horizontal plane (X, Z)
+    local lookVectorHorizontal = (targetPosition - hrp.Position) * Vector3.new(1, 0, 1)
+
+    -- Set CFrame to look horizontally, preserving vertical orientation
+    if lookVectorHorizontal.Magnitude > 0.01 then -- Avoid issues if target is directly above/below or too close
+        hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + lookVectorHorizontal)
+    end
+    -- AutoRotate remains OFF here
 end
 
-local stopMarker = false
-local ballDetected = false
-local characterInBox = false
+-- Restore Controls Function (Turns AutoRotate back ON if we turned it off)
+local function restoreGKControls()
+    if gkControlsAltered and humanoid then
+       humanoid.AutoRotate = true
+       gkControlsAltered = false -- Mark as restored
+       -- print("GK Controls Restored") -- Debug
+    end
+end
 
-local ball = workspace.BallFolder.Ball
-local autoGKConnection
-local characterInBox = false
-local _autoGKToggle
-
+-- UI Toggle Setup (Connects the Rayfield toggle)
 _autoGKToggle = GoalKeeperTab:CreateToggle({
     Name = "Auto GK",
     CurrentValue = false,
-    Flag = "auto_gk_toggle",
+    Flag = "auto_gk_toggle", -- Make sure Flag is unique
     Callback = function(Value)
-        if workspace.SensorGoals:FindFirstChild("sensor") then
-            workspace.SensorGoals:FindFirstChild("sensor"):Destroy()
-        end
-
-        local newHitbox = closestGoalieBox:Clone()
-        newHitbox.Size = Vector3.new(10, 18, 60)
-        newHitbox.CanCollide = false
-        newHitbox.Parent = workspace.SensorGoals
-        newHitbox.Name = "sensor"
-        newHitbox.Transparency = 1
-        
-        if round(closestGoalieBox.Position.X, 1) == -326.7 and round(closestGoalieBox.Position.Y, 1) == 7.8 then
-            newHitbox.Position = Vector3.new(closestGoalieBox.Position.X, closestGoalieBox.Position.Y, -564.5)
-        elseif round(closestGoalieBox.Position.X, 1) == -326.4 and round(closestGoalieBox.Position.Y, 1) == 7.9 then
-            newHitbox.Position = Vector3.new(closestGoalieBox.Position.X, closestGoalieBox.Position.Y, -14)
-        end
-
-        local sensor = newHitbox
-
-        sensor.Touched:Connect(function()
-            return
-        end)
-
-        if Value and character.GK.Value == false then
-            _autoGKToggle:Set(false)
-            Rayfield:Notify({
-                Title = "Auto GK",
-                Content = "You are not GK.",
-                Duration = 5,
-                Image = 4483362458
-            })
-        end
-
-        if Value and character.GK.Value == true then
-            autoGKConnection = RUN_SERVICE.RenderStepped:Connect(function()
-                local touchingParts = workspace:GetPartBoundsInBox(sensor.CFrame, sensor.Size)
-
-                for i,v in pairs(touchingParts) do
-                    if v.Name == "Ball" then
-                        ballDetected = true
-                        if v:FindFirstChild("marker") then
-                            for i,v in v:GetChildren() do
-                                if v.Name == "marker" then
-                                    v:Destroy()
-                                end
-                            end
-                        end
-                        break
-                    end
-            
-                    ballDetected = false
-                    stopMarker = false
-                end
-            
-                local velocity = ball.AssemblyLinearVelocity
-                local position = ball.Position
-                local velocityY = velocity.Y
-                local positionY = position.Y
-            
-                local discriminant = velocityY^2 - 4 * gravity * positionY
-                local time1 = (-velocityY + math.sqrt(discriminant)) / (2 * gravity)
-                local time2 = (-velocityY - math.sqrt(discriminant)) / (2 * gravity)
-                local impactTime = math.max(time1, time2)
-                
-                local velocityX = velocity.X
-                local velocityZ = velocity.Z
-            
-                for _, part in pairs(trajectoryFolder:GetChildren()) do
-                    part:Destroy()
-                end
-            
-                local timeStep = 0.03
-                for t = 0, impactTime, timeStep do
-                    if stopMarker or ballDetected or ball:GetAttribute("player") == player.Name or ball:GetAttribute("team") == tostring(player.Team) or (ball:GetAttribute("iframes") ~= "none" and (velocity.X ~= 0 or velocity.Y ~= 0 or velocity.Z ~= 0))  then
-                        break
-                    end
-            
-                    local currentPosition = position + Vector3.new(velocityX, velocityY, velocityZ) * t + Vector3.new(0, gravity, 0) * t^2
-
-                    -- make this not make instances since it can just use position to check if its inside the gk hitbox
-            
-                    local marker = Instance.new("Part")
-                    marker.Size = Vector3.new(2,2,2)
-                    marker.Color = Color3.new(1, 0, 0)
-                    marker.Shape = Enum.PartType.Ball
-                    marker.Anchored = true
-                    marker.CanCollide = false
-                    marker.CFrame = CFrame.new(currentPosition)
-                    marker.Transparency = 1
-                    marker.Parent = trajectoryFolder
-                    marker.Name = "marker"
-            
-                    for i,v in pairs(marker:GetTouchingParts()) do
-                        if v.Name == "sensor" then
-                            stopMarker = true
-                            
-                            if ball:FindFirstChild("marker") then
-                                ball:FindFirstChild("marker"):Destroy()
-                            end
-
-                            marker.Parent = ball
-                            break
-                        end
-                    end
-                end
-
-                local characterInBox = false
-
-                if ball:FindFirstChild("marker") and ballDetected == false and (tick() - lastDived) >= 1 and ball:GetAttribute("iframes") == "none" and ball:GetAttribute("player") ~= player.Name and ball:GetAttribute("team") ~= tostring(player.Team) then
-                    lastDived = tick()
-            
-                    local marker = ball:FindFirstChild("marker")
-
-                    local touchingParts = workspace:GetPartBoundsInBox(closestBox.CFrame, closestBox.Size)
-
-                    for i,v in pairs(touchingParts) do
-                        if v.Parent == character then
-                            characterInBox = true
-                            break
-                        end
-
-                        characterInBox = false
-                    end
-
-                    if not characterInBox then
-                        return
-                    end
-
-                    character:WaitForChild("Humanoid").AutoRotate = false
-
-                    local highestMarker = 0
-
-                    for i,v in pairs(ball:GetChildren()) do
-                        if v.Name == "marker" then
-                            if v.Position.Y > highestMarker then
-                                highestMarker = v.Position.Y
-                                marker = v
-                                ball:FindFirstChild("marker"):Destroy()
-                            end
-                        end
-                    end
-
-                    -- add mag checks to see if ball is in range to marker and if so, dive (prob like 50 magnitude?)
-                    
-                    hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(marker.Position.X, hrp.Position.Y, marker.Position.Z))
-            
-                    if marker.CFrame.Position.Y > 5 then -- really wrong for some reason. barely jumps
-                        VIRTUAL_INPUT_MANAGER:SendKeyEvent(true, 0x20, false, game)
-                        task.wait(0.05)
-                        VIRTUAL_INPUT_MANAGER:SendKeyEvent(false, 0x20, false, game)
-                    end
-            
-                    VIRTUAL_INPUT_MANAGER:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-                    task.wait(0.05)
-                    VIRTUAL_INPUT_MANAGER:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-            
-                    marker:Destroy()
-
-                    character:WaitForChild("Humanoid").AutoRotate = true
-                end
-            end)
-        elseif Value == false and autoGKConnection then
-            autoGKConnection:Disconnect()
-            autoGKConnection = nil
+        AUTO_GK_ENABLED = Value
+        if not Value then
+            -- Ensure controls are restored when manually disabling the feature
+            restoreGKControls()
         end
     end,
 })
+
+-- Main GK Loop Connection (Heartbeat)
+RUN_SERVICE.Heartbeat:Connect(function(deltaTime)
+    -- Early exit conditions
+    if not AUTO_GK_ENABLED or not character or not humanoid or not hrp or humanoid.Health <= 0 then
+        -- If feature was enabled but we exit here (e.g., player died), restore controls
+        if AUTO_GK_ENABLED then restoreGKControls() end
+        return
+    end
+
+    -- Safely find the ball
+    local ball = workspace.BallFolder:FindFirstChild("Ball")
+    if not ball then
+        restoreGKControls() -- Restore controls if ball disappears
+        return
+    end
+
+    -- Validate Ball Target
+    local isValid, reason = isGKBallValidTarget(ball)
+    if not isValid then
+        -- print("GK Ball invalid: " .. reason) -- Optional Debug
+        restoreGKControls() -- Restore controls if ball becomes invalid
+        return
+    end
+
+    -- Calculations
+    local playerPos = hrp.Position
+    local ballPos = ball.Position
+    local distanceToBall = (ballPos - playerPos).Magnitude
+
+    -- Predict ball's future position using the corrected function
+    local predictedBallPos = predictGKBallPosition(ball, PREDICTION_TIME_AHEAD_GK)
+    if not predictedBallPos then
+        restoreGKControls()
+        return
+    end
+
+    -- Use Head position for height check, fallback if Head doesn't exist
+    local playerHeadPos = character:FindFirstChild("Head") and character.Head.Position or (playerPos + Vector3.new(0, 2.5, 0))
+    local predictedHeightDiff = predictedBallPos.Y - playerHeadPos.Y
+
+    -- Horizontal projection of the predicted position onto the player's Y plane
+    local predictedPosXZ = Vector3.new(predictedBallPos.X, playerPos.Y, predictedBallPos.Z)
+    local horizontalDistanceToPredicted = (predictedPosXZ - playerPos).Magnitude
+
+    -- Decision Making Variables
+    local shouldLook = false
+    local shouldDash = false
+    local shouldJump = false
+
+    -- 1. Look Decision: Look if ball is within threshold distance
+    if distanceToBall < LOOK_AT_DISTANCE_THRESHOLD_GK then
+        shouldLook = true
+    end
+
+    -- 2. Dash Decision: Check distance, height, cooldown, and FORWARD direction
+    if horizontalDistanceToPredicted < (DASH_DISTANCE_GK - DASH_TRIGGER_DISTANCE_BUFFER_GK) and
+       predictedHeightDiff < JUMP_HEIGHT_THRESHOLD_GK and
+       not isGKDashing and
+       (tick() - lastGKDashTime > DASH_COOLDOWN_GK) then
+
+        -- Check if the predicted horizontal target is generally FORWARD
+        local directionToPredictedXZ = (predictedPosXZ - playerPos)
+        if directionToPredictedXZ.Magnitude > 0.1 then -- Avoid zero vector issues
+            local directionUnit = directionToPredictedXZ.Unit
+            local playerLookVectorXZ = hrp.CFrame.LookVector * Vector3.new(1, 0, 1)
+            if playerLookVectorXZ.Magnitude > 0.1 then
+                -- Positive dot product means target is in front hemisphere
+                if playerLookVectorXZ.Unit:Dot(directionUnit) > MIN_FORWARD_DOT_PRODUCT_GK then
+                    shouldDash = true
+                    shouldLook = true -- Ensure we look before dashing
+                -- else: Optional print("GK: Predicted dash target is not forward enough.")
+                end
+            end
+        end
+    end
+
+    -- 3. Jump Decision: Check height threshold and horizontal proximity
+    if predictedHeightDiff >= JUMP_HEIGHT_THRESHOLD_GK then
+        local horizontalDistToActualBall = (Vector3.new(ballPos.X, playerPos.Y, ballPos.Z) - playerPos).Magnitude
+        -- Is the ball horizontally close enough to be reachable with a jump?
+        if horizontalDistToActualBall < 20 then -- Tune this jump radius
+            shouldJump = true
+            shouldLook = true -- Ensure we look if jumping
+        end
+    end
+
+    -- Action Execution (Priority: Dash > Jump > Look)
+    if shouldLook then
+        lookAtGKTarget(predictedBallPos) -- Looks horizontally, turns AutoRotate OFF if needed
+
+        if shouldDash then
+            executeGKDash()
+            -- Schedule control restoration after dash cooldown (or slightly before)
+            task.delay(DASH_COOLDOWN_GK * 0.9, restoreGKControls)
+        elseif shouldJump then
+            executeGKJump()
+            -- Schedule control restoration shortly after jump
+            task.delay(0.5, restoreGKControls)
+        -- else: If only looking, AutoRotate was turned off by lookAtGKTarget.
+        -- It will be restored automatically when shouldLook becomes false or ball is invalid.
+        end
+    else
+        -- If ball is valid but we shouldn't look/act (e.g., too far), restore controls
+        restoreGKControls()
+    end
+end)
 
 --------------------------------
 
