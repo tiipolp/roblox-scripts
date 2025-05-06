@@ -1,3 +1,10 @@
+--!nolint DeprecatedApi
+--!nolint BuiltinGlobalWrite
+--!nolint LocalShadow
+--!nolint DuplicateFunction
+--!nolint IntegerParsing
+-- getgenv().newcclosure = nil
+
 queue_on_teleport([[
     loadstring(game:HttpGet("https://raw.githubusercontent.com/tiipolp/roblox-scripts/refs/heads/main/locked.lua"))()
 ]])
@@ -22,7 +29,6 @@ local hrp = character:WaitForChild("HumanoidRootPart")
 
 local VIRTUAL_INPUT_MANAGER = game:GetService("VirtualInputManager")
 local RUN_SERVICE = game:GetService("RunService")
-local REPLICATED_STORAGE = game:GetService("ReplicatedStorage")
 local COLLECTION_SERVICE = game:GetService("CollectionService")
 local USER_INPUT_SERVICE = game:GetService("UserInputService")
 
@@ -393,7 +399,7 @@ function bitEqual(a, b)
         return false
     end
 
-    return type(a) == "number" and string.format("%a", a) == string.format("%a", b) or a == b
+    return type(a) == "number" and string.format("%d", a) == string.format("%d", b) or a == b
 end
 
 if not filtergc then
@@ -659,6 +665,9 @@ local _speedSlider = MovementTab:CreateSlider({
         speedMultiplier = tonumber(Value)
     end,
 })
+
+local dribble = function()
+end-- fuck luau lsp :broken_heart:
 
 RUN_SERVICE.Heartbeat:Connect(function(deltaTime)
     if tpwalking and humanoid and speedMultiplier > 0 then
@@ -949,8 +958,6 @@ end
 
 if islclosure and getgc and debug.getconstants and debug.setconstant then
     local staminaFunc
-    local regen
-    local degen
 
     local staminaHackEnabled = false
 
@@ -978,10 +985,6 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
                         shadow = true
                     elseif v == "Air" then
                         enummat = true
-                    elseif v == 0.02 then
-                        regen = i
-                    elseif v == 0.08 then
-                        degen = i
                     end
                 end
 
@@ -1069,7 +1072,7 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
 end
 
 if hookmetamethod and getnamecallmethod then
-    function dribble(method)
+    dribble = function(method)
         local playerLookVector = hrp.CFrame.lookVector
         local playerVelocity = hrp.Velocity.Magnitude
         local playerPosition = hrp.Position
@@ -1129,6 +1132,7 @@ if hookmetamethod and getnamecallmethod then
     local antiRagdoll = false
     local ragdollTime = 1.5
     local kickPowerModToggle
+    local kickPowerZone = false
     local oldNamecall
 
     oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
@@ -1150,17 +1154,36 @@ if hookmetamethod and getnamecallmethod then
             
             return nil 
         elseif kickPowerModToggle and self.Name == "shoot" and method == "FireServer" and args[2] % 1 ~= 0 then
-            local modArgs = {}
-
-            for i,v in pairs(args) do
-                modArgs[i] = v
+            if kickPowerZone then
+                -- Only apply if in zone
+                if hrp then
+                    local distanceVector = (hrp.Position - workspace.CompletedZoneArea.Position)
+                    local halfSize = workspace.CompletedZoneArea.Size / 2
+                    
+                    if math.abs(distanceVector.X) <= halfSize.X and math.abs(distanceVector.Z) <= halfSize.Z then
+                        -- In zone, apply power
+                        local modArgs = {}
+                        for i,v in pairs(args) do
+                            modArgs[i] = v
+                        end
+                        modArgs[2] = round(math.floor((139 * (1 + customPower)) * 10) / 10, 0)
+                        game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(modArgs))            
+                        return nil
+                    else
+                        -- Not in zone, don't modify power
+                        return -- This is what was missing - need to return here to prevent normal execution
+                    end
+                end
+            else
+                -- kickPowerZone is false, apply power unconditionally
+                local modArgs = {}
+                for i,v in pairs(args) do
+                    modArgs[i] = v
+                end
+                modArgs[2] = round(math.floor((139 * (1 + customPower)) * 10) / 10, 0)
+                game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(modArgs))            
+                return nil
             end
-
-            modArgs[2] = round(math.floor((139 * (1 + customPower)) * 10) / 10, 0)
-
-            game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(modArgs))            
-
-            return nil
         end
 
         return oldNamecall(self, unpack(args))
@@ -1276,6 +1299,773 @@ if hookmetamethod and getnamecallmethod then
         Callback = function(Value)
             kickPowerScaler = Value
         end,
+    })
+
+    ShootingTab:CreateLabel("The kick power zone is where the kick power should apply. So when your inside the zone with this toggled on, kick power turns on, when your not, it turns off")
+
+    local _kickPowerZoneToggle = ShootingTab:CreateToggle({
+        Name = "Kick Power Zone",
+        CurrentValue = false,
+        Flag = "kick_power_zone_toggle",
+        Callback = function(Value)
+            kickPowerZone = Value
+        end,
+    })
+
+    local _kickPowerCreateZoneButton = ShootingTab:CreateButton({
+        Name = "Create Kick Power Zone",
+        Callback = function()
+            local function sandbox(var,func)
+                local env = getfenv(func)
+                local newenv = setmetatable({},{
+                    __index = function(self,k)
+                        if k=="script" then
+                            return var
+                        else
+                            return env[k]
+                        end
+                    end,
+                })
+                setfenv(func,newenv)
+                return func
+            end
+            
+            local cors = {}
+            local mas = Instance.new("Model", game:GetService("Lighting"))
+            
+            local CombinedScript = Instance.new("LocalScript")
+            CombinedScript.Name = "ZoneAndFreecam"
+            CombinedScript.Parent = mas
+            
+            table.insert(cors, sandbox(CombinedScript, function()
+                -- Services
+                local ContextActionService = game:GetService("ContextActionService")
+                local Players = game:GetService("Players")
+                local RunService = game:GetService("RunService")
+                local StarterGui = game:GetService("StarterGui")
+                local UserInputService = game:GetService("UserInputService")
+                local Workspace = game:GetService("Workspace")
+            
+                local LocalPlayer = Players.LocalPlayer
+            
+                if not LocalPlayer then
+                    Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+                    LocalPlayer = Players.LocalPlayer
+                end
+            
+                local mouse = LocalPlayer:GetMouse()
+                local Camera = workspace.CurrentCamera
+            
+                workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+                    local newCamera = workspace.CurrentCamera
+                    if newCamera then
+                        Camera = newCamera
+                    end
+                end)
+            
+                -- Forward declare functions
+                local StopFreecam
+                local cleanupPointsAndPreview
+                local stopZoneCreation
+                local completeZone_Actual
+                local removePoint
+            
+                -- Zone Creation Settings & State
+                local MAX_POINTS = 4
+                local MARKER_SIZE = Vector3.new(1, 1, 1)
+                local MARKER_COLOR = Color3.fromRGB(255, 255, 0) -- Yellow
+                local ZONE_PREVIEW_COLOR = Color3.fromRGB(0, 255, 255) -- Cyan
+                local ZONE_PREVIEW_TRANS = 0.7
+            
+                local placingPoints = false
+                local points = {}
+                local zonePreview = nil
+                local finalZone = nil
+                local screenGui_Zone = nil
+                local completeButtonRef_Zone = nil
+            
+                -- Freecam Code
+                do
+                    local pi = math.pi
+                    local abs = math.abs
+                    local clamp = math.clamp
+                    local exp = math.exp
+                    local rad = math.rad
+                    local sign = math.sign
+                    local sqrt = math.sqrt
+                    local tan = math.tan
+            
+                    local INPUT_PRIORITY = Enum.ContextActionPriority.High.Value
+            
+                    local NAV_GAIN = Vector3.new(1, 1, 1)*64
+                    local PAN_GAIN = Vector2.new(0.75, 1)*8
+                    local FOV_GAIN = 300
+                    local PITCH_LIMIT = rad(90)
+                    local VEL_STIFFNESS = 10
+                    local PAN_STIFFNESS = 10
+                    local FOV_STIFFNESS = 4.0
+            
+                    local Spring = {}
+                    do
+                        Spring.__index = Spring
+                        function Spring.new(freq, pos)
+                            local self = setmetatable({}, Spring)
+                            self.f = freq
+                            self.p = pos
+                            self.v = pos*0
+                            return self
+                        end
+                        
+                        function Spring:Update(dt, goal)
+                            local f = self.f*2*pi
+                            local p0 = self.p
+                            local v0 = self.v
+                            local offset = goal - p0
+                            local decay = exp(-f*dt)
+                            local p1 = goal + (v0*dt - offset*(f*dt + 1))*decay
+                            local v1 = (f*dt*(offset*f - v0) + v0)*decay
+                            self.p = p1
+                            self.v = v1
+                            return p1
+                        end
+                        
+                        function Spring:Reset(pos)
+                            self.p = pos
+                            self.v = pos*0
+                        end
+                    end
+            
+                    local cameraPos = Vector3.new()
+                    local cameraRot = Vector2.new()
+                    local cameraFov = 0
+                    local velSpring = Spring.new(VEL_STIFFNESS, Vector3.new())
+                    local panSpring = Spring.new(PAN_STIFFNESS, Vector2.new())
+                    local fovSpring = Spring.new(FOV_STIFFNESS, 0)
+            
+                    local Input = {}
+                    do
+                        local thumbstickCurve
+                        do
+                            local K_CURVATURE = 2.0
+                            local K_DEADZONE = 0.15
+                            local function fCurve(x)
+                                return (exp(K_CURVATURE*x) - 1)/(exp(K_CURVATURE) - 1)
+                            end
+                            local function fDeadzone(x)
+                                return fCurve((x - K_DEADZONE)/(1 - K_DEADZONE))
+                            end
+                            function thumbstickCurve(x)
+                                return sign(x)*clamp(fDeadzone(abs(x)), 0, 1)
+                            end
+                        end
+                        
+                        local gamepad = {
+                            ButtonX=0, ButtonY=0, DPadDown=0, DPadUp=0,
+                            ButtonL2=0, ButtonR2=0, Thumbstick1=Vector2.new(), Thumbstick2=Vector2.new()
+                        }
+                        
+                        local keyboard = {
+                            W=0, A=0, S=0, D=0, E=0, Q=0, U=0, H=0, J=0, K=0, I=0, Y=0,
+                            Up=0, Down=0, LeftShift=0, RightShift=0
+                        }
+                        
+                        local mouse_fc = {Delta=Vector2.new(), MouseWheel=0}
+                        
+                        local NAV_GAMEPAD_SPEED = Vector3.new(1, 1, 1)
+                        local NAV_KEYBOARD_SPEED = Vector3.new(1, 1, 1)
+                        local PAN_MOUSE_SPEED = Vector2.new(1, 1)*(pi/64)
+                        local PAN_GAMEPAD_SPEED = Vector2.new(1, 1)*(pi/8)
+                        local FOV_WHEEL_SPEED = 1.0
+                        local FOV_GAMEPAD_SPEED = 0.25
+                        local NAV_ADJ_SPEED = 0.75
+                        local NAV_SHIFT_MUL = 0.25
+                        local navSpeed = 1
+                        
+                        function Input.Vel(dt)
+                            navSpeed = clamp(navSpeed + dt*(keyboard.Up - keyboard.Down)*NAV_ADJ_SPEED, 0.01, 4)
+                            local kGamepad = Vector3.new(
+                                thumbstickCurve(gamepad.Thumbstick1.x),
+                                thumbstickCurve(gamepad.ButtonR2) - thumbstickCurve(gamepad.ButtonL2),
+                                thumbstickCurve(-gamepad.Thumbstick1.y)
+                            )*NAV_GAMEPAD_SPEED
+                            
+                            local kKeyboard = Vector3.new(
+                                keyboard.D - keyboard.A + keyboard.K - keyboard.H,
+                                keyboard.E - keyboard.Q + keyboard.I - keyboard.Y,
+                                keyboard.S - keyboard.W + keyboard.J - keyboard.U
+                            )*NAV_KEYBOARD_SPEED
+                            
+                            local shift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+                            return (kGamepad + kKeyboard)*(navSpeed*(shift and NAV_SHIFT_MUL or 1))
+                        end
+                        
+                        function Input.Pan(dt)
+                            local kGamepad = Vector2.new(
+                                thumbstickCurve(gamepad.Thumbstick2.y),
+                                thumbstickCurve(-gamepad.Thumbstick2.x)
+                            )*PAN_GAMEPAD_SPEED
+                            
+                            local kMouse = mouse_fc.Delta*PAN_MOUSE_SPEED
+                            mouse_fc.Delta = Vector2.new()
+                            return kGamepad + kMouse
+                        end
+                        
+                        function Input.Fov(dt)
+                            local kGamepad = (gamepad.ButtonX - gamepad.ButtonY)*FOV_GAMEPAD_SPEED
+                            local kMouse = mouse_fc.MouseWheel*FOV_WHEEL_SPEED
+                            mouse_fc.MouseWheel = 0
+                            return kGamepad + kMouse
+                        end
+                        
+                        do
+                            local function Keypress(action, state, input)
+                                keyboard[input.KeyCode.Name] = state == Enum.UserInputState.Begin and 1 or 0
+                                return Enum.ContextActionResult.Sink
+                            end
+                            
+                            local function GpButton(action, state, input)
+                                gamepad[input.KeyCode.Name] = state == Enum.UserInputState.Begin and 1 or 0
+                                return Enum.ContextActionResult.Sink
+                            end
+                            
+                            local function MousePan(action, state, input)
+                                local delta = input.Delta
+                                mouse_fc.Delta = Vector2.new(-delta.y, -delta.x)
+                                return Enum.ContextActionResult.Sink
+                            end
+                            
+                            local function Thumb(action, state, input)
+                                gamepad[input.KeyCode.Name] = input.Position
+                                return Enum.ContextActionResult.Sink
+                            end
+                            
+                            local function Trigger(action, state, input)
+                                gamepad[input.KeyCode.Name] = input.Position.z
+                                return Enum.ContextActionResult.Sink
+                            end
+                            
+                            local function MouseWheel(action, state, input)
+                                mouse_fc[input.UserInputType.Name] = -input.Position.z
+                                return Enum.ContextActionResult.Sink
+                            end
+                            
+                            local function Zero(t)
+                                for k, v in pairs(t) do
+                                    t[k] = v*0
+                                end
+                            end
+                            
+                            function Input.StartCapture()
+                                ContextActionService:BindActionAtPriority("FreecamKeyboard", Keypress, false, INPUT_PRIORITY,
+                                    Enum.KeyCode.W, Enum.KeyCode.U, Enum.KeyCode.A, Enum.KeyCode.H, Enum.KeyCode.S, Enum.KeyCode.J,
+                                    Enum.KeyCode.D, Enum.KeyCode.K, Enum.KeyCode.E, Enum.KeyCode.I, Enum.KeyCode.Q, Enum.KeyCode.Y,
+                                    Enum.KeyCode.Up, Enum.KeyCode.Down
+                                )
+                                ContextActionService:BindActionAtPriority("FreecamMousePan", MousePan, false, INPUT_PRIORITY, Enum.UserInputType.MouseMovement)
+                                ContextActionService:BindActionAtPriority("FreecamMouseWheel", MouseWheel, false, INPUT_PRIORITY, Enum.UserInputType.MouseWheel)
+                                ContextActionService:BindActionAtPriority("FreecamGamepadButton", GpButton, false, INPUT_PRIORITY, Enum.KeyCode.ButtonX, Enum.KeyCode.ButtonY)
+                                ContextActionService:BindActionAtPriority("FreecamGamepadTrigger", Trigger, false, INPUT_PRIORITY, Enum.KeyCode.ButtonR2, Enum.KeyCode.ButtonL2)
+                                ContextActionService:BindActionAtPriority("FreecamGamepadThumbstick", Thumb, false, INPUT_PRIORITY, Enum.KeyCode.Thumbstick1, Enum.KeyCode.Thumbstick2)
+                            end
+                            
+                            function Input.StopCapture()
+                                navSpeed = 1
+                                Zero(gamepad)
+                                Zero(keyboard)
+                                Zero(mouse_fc)
+                                ContextActionService:UnbindAction("FreecamKeyboard")
+                                ContextActionService:UnbindAction("FreecamMousePan")
+                                ContextActionService:UnbindAction("FreecamMouseWheel")
+                                ContextActionService:UnbindAction("FreecamGamepadButton")
+                                ContextActionService:UnbindAction("FreecamGamepadTrigger")
+                                ContextActionService:UnbindAction("FreecamGamepadThumbstick")
+                            end
+                        end
+                    end
+            
+                    local function StepFreecam(dt)
+                        local vel = velSpring:Update(dt, Input.Vel(dt))
+                        local pan = panSpring:Update(dt, Input.Pan(dt))
+                        local fov = fovSpring:Update(dt, Input.Fov(dt))
+                        local zoomFactor = sqrt(tan(rad(70/2))/tan(rad(cameraFov/2)))
+                        
+                        cameraFov = clamp(cameraFov + fov*FOV_GAIN*(dt/zoomFactor), 1, 120)
+                        cameraRot = cameraRot + pan*PAN_GAIN*(dt/zoomFactor)
+                        cameraRot = Vector2.new(clamp(cameraRot.x, -PITCH_LIMIT, PITCH_LIMIT), cameraRot.y%(2*pi))
+                        
+                        local cameraCFrame = CFrame.new(cameraPos)*CFrame.fromOrientation(cameraRot.x, cameraRot.y, 0)*CFrame.new(vel*NAV_GAIN*dt)
+                        cameraPos = cameraCFrame.p
+                        Camera.CFrame = cameraCFrame
+                        Camera.FieldOfView = cameraFov
+                    end
+            
+                    local PlayerState = {}
+                    do
+                        local cameraSubject
+                        local cameraType
+                        local cameraFieldOfView
+                        local screenGuis = {}
+                        local coreGuis = {Backpack=true, Chat=true, Health=true, PlayerList=true}
+                        local setCores = {BadgesNotificationsActive=true, PointsNotificationsActive=true}
+                        local mouseBehavior
+                        local mouseIconEnabled
+                        
+                        function PlayerState.Push()
+                            for name in pairs(coreGuis) do
+                                coreGuis[name] = StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType[name])
+                                StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType[name], false)
+                            end
+                            
+                            for name in pairs(setCores) do
+                                setCores[name] = StarterGui:GetCore(name)
+                                StarterGui:SetCore(name, false)
+                            end
+                            
+                            local playergui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+                            if playergui then
+                                for _, gui in pairs(playergui:GetChildren()) do
+                                    if gui:IsA("ScreenGui") and gui.Enabled and gui ~= screenGui_Zone then
+                                        screenGuis[#screenGuis + 1] = gui
+                                        gui.Enabled = false
+                                    end
+                                end
+                            end
+                            
+                            cameraFieldOfView = Camera.FieldOfView
+                            Camera.FieldOfView = 70
+                            cameraType = Camera.CameraType
+                            Camera.CameraType = Enum.CameraType.Scriptable
+                            cameraSubject = Camera.CameraSubject
+                            Camera.CameraSubject = nil
+                            mouseIconEnabled = UserInputService.MouseIconEnabled
+                            UserInputService.MouseIconEnabled = false
+                            mouseBehavior = UserInputService.MouseBehavior
+                            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+                        end
+                        
+                        function PlayerState.Pop()
+                            for name, isEnabled in pairs(coreGuis) do
+                                StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType[name], isEnabled)
+                            end
+                            
+                            for name, isEnabled in pairs(setCores) do
+                                StarterGui:SetCore(name, isEnabled)
+                            end
+                            
+                            for _, gui in pairs(screenGuis) do
+                                if gui.Parent then
+                                    gui.Enabled = true
+                                end
+                            end
+                            screenGuis = {}
+                            
+                            if cameraFieldOfView then
+                                Camera.FieldOfView = cameraFieldOfView
+                                cameraFieldOfView = nil
+                            end
+                            
+                            if cameraType then
+                                Camera.CameraType = cameraType
+                                cameraType = nil
+                            end
+                            
+                            if cameraSubject then
+                                Camera.CameraSubject = cameraSubject
+                                cameraSubject = nil
+                            end
+                            
+                            if mouseIconEnabled ~= nil then
+                                UserInputService.MouseIconEnabled = mouseIconEnabled
+                                mouseIconEnabled = nil
+                            end
+                            
+                            if mouseBehavior ~= nil then
+                                UserInputService.MouseBehavior = mouseBehavior
+                                mouseBehavior = nil
+                            end
+                        end
+                    end
+            
+                    local freecamActuallyEnabled = false
+            
+                    local function StartFreecam()
+                        if freecamActuallyEnabled then return end
+                        print("Starting User Freecam Module")
+                        
+                        local cameraCFrame = Camera.CFrame
+                        cameraRot = Vector2.new(cameraCFrame:toEulerAnglesYXZ())
+                        cameraPos = cameraCFrame.p
+                        cameraFov = Camera.FieldOfView
+                        
+                        velSpring:Reset(Vector3.new())
+                        panSpring:Reset(Vector2.new())
+                        fovSpring:Reset(0)
+                        
+                        PlayerState.Push()
+                        RunService:BindToRenderStep("Freecam", Enum.RenderPriority.Camera.Value, StepFreecam)
+                        Input.StartCapture()
+                        freecamActuallyEnabled = true
+                    end
+            
+                    StopFreecam = function()
+                        if not freecamActuallyEnabled then return end
+                        print("Stopping User Freecam Module")
+                        
+                        Input.StopCapture()
+                        RunService:UnbindFromRenderStep("Freecam")
+                        PlayerState.Pop()
+                        freecamActuallyEnabled = false
+                    end
+            
+                    StartFreecam()
+                end
+            
+                -- Zone Creation Functions
+                local function updatePreview()
+                    if #points < 2 then
+                        if zonePreview then zonePreview:Destroy(); zonePreview = nil end
+                        return
+                    end
+                    
+                    local minP = Vector3.new(math.huge, math.huge, math.huge)
+                    local maxP = Vector3.new(-math.huge, -math.huge, -math.huge)
+                    
+                    for _, data in ipairs(points) do
+                        minP = minP:Min(data.Position)
+                        maxP = maxP:Max(data.Position)
+                    end
+                    
+                    local size = maxP - minP
+                    size = Vector3.new(math.max(size.X, 0.1), math.max(size.Y, 0.1), math.max(size.Z, 0.1))
+                    local center = minP + size / 2
+                    
+                    if not zonePreview then
+                        zonePreview = Instance.new("Part")
+                        zonePreview.Name = "ZoneVisualPreview"
+                        zonePreview.Shape = Enum.PartType.Block
+                        zonePreview.Material = Enum.Material.SmoothPlastic
+                        zonePreview.Color = ZONE_PREVIEW_COLOR
+                        zonePreview.Transparency = ZONE_PREVIEW_TRANS
+                        zonePreview.Anchored = true
+                        zonePreview.CanCollide = false
+                        zonePreview.CanQuery = false
+                        zonePreview.CanTouch = false
+                        zonePreview.Locked = true
+                        zonePreview.Parent = Workspace
+                    end
+                    
+                    zonePreview.Size = size
+                    zonePreview.CFrame = CFrame.new(center)
+                end
+            
+                local function addPoint(pos)
+                    if not placingPoints or #points >= MAX_POINTS then return end
+                    
+                    local marker = Instance.new("Part")
+                    marker.Name = "ZoneMarkerPoint"
+                    marker.Shape = Enum.PartType.Ball
+                    marker.Material = Enum.Material.Neon
+                    marker.Size = MARKER_SIZE
+                    marker.Color = MARKER_COLOR
+                    marker.Anchored = true
+                    marker.CanCollide = false
+                    marker.CanQuery = true
+                    marker.CanTouch = false
+                    marker.Locked = true
+                    marker.CFrame = CFrame.new(pos)
+                    marker.Parent = Workspace
+                    
+                    table.insert(points, { Part = marker, Position = pos })
+                    print("Point", #points, "added")
+                    
+                    updatePreview()
+                    
+                    if completeButtonRef_Zone and #points == MAX_POINTS then
+                        completeButtonRef_Zone.Active = true
+                        completeButtonRef_Zone.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+                        print("Ready to complete zone.")
+                    end
+                end
+            
+                removePoint = function(actionName, inputState, inputObj)
+                    if not placingPoints then return Enum.ContextActionResult.Pass end
+                    
+                    if inputState == Enum.UserInputState.Begin then
+                        local target = mouse.Target
+                        if target and target.Name == "ZoneMarkerPoint" then
+                            local index = -1
+                            for i, data in ipairs(points) do
+                                if data.Part == target then
+                                    index = i
+                                    break
+                                end
+                            end
+                            
+                            if index > 0 then
+                                print("Removing point", index)
+                                local removedData = table.remove(points, index)
+                                removedData.Part:Destroy()
+                                updatePreview()
+                                
+                                if completeButtonRef_Zone then
+                                    completeButtonRef_Zone.Active = false
+                                    completeButtonRef_Zone.BackgroundColor3 = Color3.fromRGB(100, 150, 100)
+                                end
+                                
+                                return Enum.ContextActionResult.Sink
+                            end
+                        end
+                    end
+                    
+                    return Enum.ContextActionResult.Pass
+                end
+            
+                cleanupPointsAndPreview = function()
+                    print("Cleaning up points and preview...")
+                    
+                    if zonePreview then
+                        zonePreview:Destroy()
+                        zonePreview = nil
+                    end
+                    
+                    for _, data in ipairs(points) do
+                        if data.Part then
+                            data.Part:Destroy()
+                        end
+                    end
+                    
+                    points = {}
+                    
+                    if completeButtonRef_Zone then
+                        completeButtonRef_Zone.Active = false
+                        completeButtonRef_Zone.BackgroundColor3 = Color3.fromRGB(100, 150, 100)
+                    end
+                end
+            
+                completeZone_Actual = function()
+                    if #points ~= MAX_POINTS then
+                        warn("Not enough points!")
+                        return
+                    end
+                    
+                    print("Completing zone...")
+                    
+                    if zonePreview then
+                        finalZone = zonePreview:Clone()
+                        finalZone.Name = "CompletedZoneArea"
+                        finalZone.Transparency = 1
+                        finalZone.Color = Color3.fromRGB(0, 0, 0)
+                        finalZone.CanCollide = false
+                        finalZone.CanQuery = true
+                        finalZone.CanTouch = true
+                        finalZone.Parent = Workspace
+                        print("Final zone created:", finalZone:GetFullName())
+                    else
+                        warn("Zone preview missing?")
+                    end
+                    
+                    cleanupPointsAndPreview()
+                    if StopFreecam then StopFreecam() end
+                    ContextActionService:UnbindAction("ToggleMouseLock") -- Unbind mouse lock toggle
+                    ContextActionService:UnbindAction("RemovePointAction_Zone") -- Unbind right-click remove
+                    if screenGui_Zone then screenGui_Zone:Destroy(); screenGui_Zone = nil end
+                    placingPoints = false
+                end
+
+                local centerIndicator, mouseLockIndicator
+            
+                stopZoneCreation = function()
+                    print("Stopping zone creation...")
+                    if StopFreecam then StopFreecam() end
+                    cleanupPointsAndPreview()
+                    ContextActionService:UnbindAction("ToggleMouseLock") -- Unbind mouse lock toggle
+                    ContextActionService:UnbindAction("RemovePointAction_Zone") -- Unbind right-click remove
+                    if screenGui_Zone then screenGui_Zone:Destroy(); screenGui_Zone = nil end
+                    centerIndicator = nil
+                    mouseLockIndicator = nil
+                    placingPoints = false
+                end
+            
+                local function setupUI_Zone()
+                    if screenGui_Zone then screenGui_Zone:Destroy() end
+                    
+                    screenGui_Zone = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+                    screenGui_Zone.Name = "ZoneCreatorUI_" .. math.random(1000)
+                    screenGui_Zone.ResetOnSpawn = false
+                    
+                    local frame = Instance.new("Frame", screenGui_Zone)
+                    frame.Size = UDim2.new(0, 300, 0, 50)
+                    frame.Position = UDim2.new(0.5, -150, 1, -70)
+                    frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                    frame.BackgroundTransparency = 0.3
+                    frame.BorderSizePixel = 0
+                    
+                    local stopBtn = Instance.new("TextButton", frame)
+                    stopBtn.Name = "StopButton"
+                    stopBtn.Size = UDim2.new(0.48, 0, 1, 0)
+                    stopBtn.Position = UDim2.new(0, 0, 0, 0)
+                    stopBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+                    stopBtn.Text = "Stop"
+                    stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    stopBtn.Font = Enum.Font.SourceSansBold
+                    stopBtn.TextSize = 18
+                    stopBtn.MouseButton1Click:Connect(stopZoneCreation)
+                    
+                    local completeBtn = Instance.new("TextButton", frame)
+                    completeBtn.Name = "CompleteButton"
+                    completeBtn.Size = UDim2.new(0.48, 0, 1, 0)
+                    completeBtn.Position = UDim2.new(0.52, 0, 0, 0)
+                    completeBtn.BackgroundColor3 = Color3.fromRGB(100, 150, 100)
+                    completeBtn.Text = "Complete Zone"
+                    completeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    completeBtn.Font = Enum.Font.SourceSansBold
+                    completeBtn.TextSize = 18
+                    completeBtn.AutoButtonColor = true
+                    completeBtn.Active = false
+                    completeBtn.MouseButton1Click:Connect(completeZone_Actual)
+                    
+                    completeButtonRef_Zone = completeBtn
+                end
+                
+                local function handleZoneInput(input, processed)
+                    if processed then return end
+                    if not placingPoints then return end
+            
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        local mousePos = UserInputService:GetMouseLocation()
+                        local unitRay = Camera:ScreenPointToRay(mousePos.X, mousePos.Y)
+                        local params = RaycastParams.new()
+                        local filter = {LocalPlayer.Character}
+                        
+                        for _, data in ipairs(points) do
+                            table.insert(filter, data.Part)
+                        end
+                        
+                        if zonePreview then
+                            table.insert(filter, zonePreview)
+                        end
+                        
+                        params.FilterDescendantsInstances = filter
+                        params.FilterType = Enum.RaycastFilterType.Exclude
+                        local result = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, params)
+                        
+                        if result then
+                            addPoint(result.Position)
+                        else
+                            print("Zone Click: Missed world geometry.")
+                        end
+                    end
+                end
+            
+                local mouseIsLocked = true
+            
+                local function toggleMouseLock(actionName, inputState, inputObject)
+                    if inputState == Enum.UserInputState.Begin then
+                        mouseIsLocked = not mouseIsLocked
+                        
+                        if mouseIsLocked then
+                            UserInputService.MouseIconEnabled = false
+                            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+                            if mouseLockIndicator then
+                                mouseLockIndicator.Text = "MOUSE LOCKED (Ctrl to unlock)"
+                                mouseLockIndicator.TextColor3 = Color3.fromRGB(255, 100, 100)
+                            end
+                        else
+                            UserInputService.MouseIconEnabled = true
+                            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                            if mouseLockIndicator then
+                                mouseLockIndicator.Text = "MOUSE UNLOCKED (Ctrl to lock)"
+                                mouseLockIndicator.TextColor3 = Color3.fromRGB(100, 255, 100)
+                            end
+                        end
+                    end
+                    
+                    return Enum.ContextActionResult.Sink
+                end
+            
+                local function setupMouseLockToggle()
+                    ContextActionService:BindActionAtPriority(
+                        "ToggleMouseLock", 
+                        toggleMouseLock, 
+                        false, 
+                        Enum.ContextActionPriority.High.Value + 10, 
+                        Enum.KeyCode.LeftControl, 
+                        Enum.KeyCode.RightControl
+                    )
+                end
+                            
+                local function setupScreenIndicators()
+                    -- Center dot
+                    centerIndicator = Instance.new("Frame", screenGui_Zone)
+                    centerIndicator.Size = UDim2.new(0, 10, 0, 10)
+                    centerIndicator.Position = UDim2.new(0.5, -5, 0.5, -5)
+                    centerIndicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                    centerIndicator.BorderSizePixel = 0
+                    
+                    local circle = Instance.new("UICorner", centerIndicator)
+                    circle.CornerRadius = UDim.new(1, 0)
+                    
+                    -- Controls indicator
+                    mouseLockIndicator = Instance.new("TextLabel", screenGui_Zone)
+                    mouseLockIndicator.Size = UDim2.new(0, 300, 0, 30)
+                    mouseLockIndicator.Position = UDim2.new(0.5, -150, 0, 10)
+                    mouseLockIndicator.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                    mouseLockIndicator.BackgroundTransparency = 0.5
+                    mouseLockIndicator.TextColor3 = Color3.fromRGB(255, 100, 100)
+                    mouseLockIndicator.Text = "MOUSE LOCKED (Ctrl to unlock)"
+                    mouseLockIndicator.Font = Enum.Font.SourceSansBold
+                    mouseLockIndicator.TextSize = 16
+                    
+                    local corner = Instance.new("UICorner", mouseLockIndicator)
+                    corner.CornerRadius = UDim.new(0, 5)
+                end
+            
+                -- Initialization
+                local function startZoneCreation()
+                    print("Starting zone creation process...")
+                    cleanupPointsAndPreview()
+                    setupUI_Zone()
+                    setupScreenIndicators()
+                    setupMouseLockToggle()
+                    placingPoints = true
+                    ContextActionService:BindAction("RemovePointAction_Zone", removePoint, false, Enum.UserInputType.MouseButton2)
+                    print("Zone Creation Active. Left-click to place points, Right-click points to remove.")
+                end
+            
+                UserInputService.InputBegan:Connect(handleZoneInput)
+            
+                local function fullCleanup()
+                    print("Full cleanup...")
+                    stopZoneCreation()
+                end
+            
+                if LocalPlayer.Character then
+                    LocalPlayer.Character.Destroying:Connect(fullCleanup)
+                end
+                
+                LocalPlayer.CharacterAdded:Connect(function(char)
+                    char.Destroying:Connect(fullCleanup)
+                end)
+            
+                startZoneCreation()
+                print("Zone Creator + Freecam Loaded.")
+            end))
+            
+            for i,v in pairs(mas:GetChildren()) do
+                v.Parent = game:GetService("Players").LocalPlayer.PlayerGui
+            end
+            
+            mas:Destroy()
+            
+            for i,v in pairs(cors) do
+                spawn(function()
+                    local success, err = pcall(v)
+                    if not success then
+                        warn("Error running sandboxed script:", err)
+                    end
+                end)
+            end
+        end
     })
 end
 
@@ -1708,9 +2498,8 @@ RUN_SERVICE.Heartbeat:Connect(function(deltaTime)
     end
 
     -- Validate Ball Target
-    local isValid, reason = isGKBallValidTarget(ball)
+    local isValid = isGKBallValidTarget(ball)
     if not isValid then
-        -- print("GK Ball invalid: " .. reason) -- Optional Debug
         restoreGKControls() -- Restore controls if ball becomes invalid
         return
     end
@@ -1862,7 +2651,7 @@ local _giveTraitDropdown = CharacterTab:CreateDropdown({
     Flag = "give_trait_dropdown",
     Callback = function(Options)
         traitHandler(Options)
-    end,1
+    end,
 })
 
 CharacterTab:CreateSection("Ego")
@@ -1964,14 +2753,6 @@ local _tracerOutlineTransparencySlider = CharacterTab:CreateSlider({
     end,
 })
 
-local function tracer_cleanup()
-    for _, tracer in pairs(tracers) do
-        tracer.line:Destroy()
-        tracer.outline:Destroy()
-    end
-    tracers = {}
-end
-
 local originPoints = {
     Bottom = function() return Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y) end,
     Middle = function() return workspace.CurrentCamera.ViewportSize / 2 end,
@@ -2008,7 +2789,6 @@ RUN_SERVICE.Heartbeat:Connect(function()
         local character = plr.Character
         if not character then continue end
         
-        local humanoid = character.Humanoid
         local hrp = character.HumanoidRootPart
         
         local position, onScreen = workspace.CurrentCamera:WorldToViewportPoint(hrp.Position)
