@@ -999,8 +999,8 @@ if islclosure and getgc and debug.getconstants and debug.setconstant then
 
     local regenOn = false
     local degenOn = false
-    local regenVal
-    local degenVal
+    local regenVal = 0.02
+    local degenVal = 0.08
 
     local _regenSlider = MovementTab:CreateSlider({
         Name = "Stamina Regen Rate (Default: 0.02)",
@@ -1154,8 +1154,7 @@ if hookmetamethod and getnamecallmethod then
             
             return nil 
         elseif kickPowerModToggle and self.Name == "shoot" and method == "FireServer" and args[2] % 1 ~= 0 then
-            if kickPowerZone then
-                -- Only apply if in zone
+            if kickPowerZone and workspace:FindFirstChild("CompletedZoneArea") then
                 if hrp then
                     local distanceVector = (hrp.Position - workspace.CompletedZoneArea.Position)
                     local halfSize = workspace.CompletedZoneArea.Size / 2
@@ -1169,13 +1168,11 @@ if hookmetamethod and getnamecallmethod then
                         modArgs[2] = round(math.floor((139 * (1 + customPower)) * 10) / 10, 0)
                         game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(modArgs))            
                         return nil
-                    else
-                        -- Not in zone, don't modify power
-                        return -- This is what was missing - need to return here to prevent normal execution
                     end
+
+                    return nil
                 end
             else
-                -- kickPowerZone is false, apply power unconditionally
                 local modArgs = {}
                 for i,v in pairs(args) do
                     modArgs[i] = v
@@ -2364,7 +2361,7 @@ local function isGKBallValidTarget(ballInstance)
     end
 
     -- Check iframes/invincibility while the ball is actively moving
-    if velocity.Magnitude > 1 and
+    if velocity.Magnitude > 0 and
        ((iframesAttribute and iframesAttribute ~= "none") or
         (headeriframesAttribute and headeriframesAttribute ~= "none") or
         (kickiframesAttribute and kickiframesAttribute ~= "none")) then
@@ -2393,11 +2390,9 @@ end
 
 -- Prediction Function (FIXED PHYSICS: Uses workspace.Gravity directly)
 local function predictGKBallPosition(ballInstance, t)
-    if not ballInstance or not ballInstance:IsA("BasePart") then return nil end
-
     local velocity = ballInstance.AssemblyLinearVelocity
     local position = ballInstance.Position
-    local currentGravity = workspace.Gravity -- Use actual workspace gravity value
+    local currentGravity = 0.5 * -workspace.Gravity -- Use actual workspace gravity value
 
     local predictedX = position.X + velocity.X * t
     -- Correct physics formula for Y position
@@ -2451,11 +2446,9 @@ local function lookAtGKTarget(targetPosition)
     -- Calculate look direction only on the horizontal plane (X, Z)
     local lookVectorHorizontal = (targetPosition - hrp.Position) * Vector3.new(1, 0, 1)
 
-    -- Set CFrame to look horizontally, preserving vertical orientation
-    if lookVectorHorizontal.Magnitude > 0.01 then -- Avoid issues if target is directly above/below or too close
+     if lookVectorHorizontal.Magnitude > 0.01 then -- Avoid issues if target is directly above/below or too close
         hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + lookVectorHorizontal)
     end
-    -- AutoRotate remains OFF here
 end
 
 -- Restore Controls Function (Turns AutoRotate back ON if we turned it off)
