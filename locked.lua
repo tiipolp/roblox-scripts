@@ -731,7 +731,7 @@ RUN_SERVICE.Heartbeat:Connect(function(deltaTime)
                             
                             game:GetService("ReplicatedStorage"):WaitForChild("shoot"):FireServer(unpack(args))
 
-                            task.wait(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue() / 1000)
+                            task.wait(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue() / 500)
 
                             for _ = 1, 3 do
                                 dribble()
